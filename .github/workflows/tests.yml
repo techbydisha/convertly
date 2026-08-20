@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # Convertly is a macOS tool: it uses `sips` and Quick Look, so the tests
+    # have to run on a macOS runner to exercise anything real.
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Confirm there are no dependencies to install
+        run: |
+          python3 -c "import tomllib; d = tomllib.load(open('pyproject.toml','rb'));
+          deps = d['project']['dependencies']
+          assert deps == [], f'unexpected dependencies: {deps}'
+          print('no runtime dependencies, as intended')"
+
+      - name: Run tests with the coverage floor
+        run: python3 tests/coverage_report.py --min 85
+
+      - name: Check the app starts and serves the UI
+        run: |
+          python3 run.py --no-browser --port 8791 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8791/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8791/health
+          curl -fsS http://127.0.0.1:8791/ | grep -q "<title>Convertly</title>"
+          echo "the app starts and serves its UI"
+          kill %1

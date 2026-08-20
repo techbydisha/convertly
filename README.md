@@ -1,0 +1,182 @@
+# Convertly
+
+A local file converter and PDF editor for macOS. Convert images and documents to
+**JPG**, **JPEG** or **PDF**, pull pages out of a PDF, and join PDFs together.
+
+Everything runs on your own Mac. Nothing is uploaded, nothing is stored, and
+there is nothing to install.
+
+---
+
+## Install
+
+You need **macOS** and **Python 3.10 or newer** (`python3 -V` to check — recent
+macOS ships a suitable version).
+
+```bash
+git clone https://github.com/techbydisha/convertly.git
+cd convertly
+python3 run.py
+```
+
+That's the whole installation. Convertly uses only the Python standard library
+and tools already built into macOS, so there are no packages to install and no
+build step.
+
+Your browser opens at `http://127.0.0.1:8765/`. Press `Ctrl+C` in the terminal to
+stop it.
+
+**Prefer double-clicking?** Open the folder in Finder and double-click
+**`Convertly.command`**.
+
+**Prefer a command?** `pip install .` adds a `convertly` command that starts it
+from anywhere.
+
+---
+
+## Use
+
+### Converting files
+
+1. Drag files onto the drop zone, or click it to browse. Several at once is fine.
+2. Each file appears under **Your files** with a thumbnail, so you can see what
+   you picked. Click a thumbnail for a bigger preview, or **×** to remove it.
+3. Choose a format and quality, then press **Convert**.
+4. Each row shows the result — its new name and size — with a **Download**
+   button. **Download all** saves the batch; **Clear** empties the list.
+
+Nothing converts until you press **Convert**. Changing the format or quality
+afterwards clears the results and waits for you to press it again, so what you
+download always matches what is selected. After converting, the thumbnail shows
+the *converted* image: what you see is what you get.
+
+### Editing PDFs
+
+The **Edit PDF** tab keeps the pages you want and joins documents together.
+
+1. Drop in one or more PDFs. Each shows its page count and a preview.
+2. In the **Pages** box, say what to keep — leave it blank for all, or:
+
+   | You type | You get |
+   | --- | --- |
+   | `2-4` | pages 2, 3 and 4 |
+   | `1,3,5-7` | pages 1, 3, 5, 6 and 7 |
+   | `2-` | page 2 to the end |
+   | `-3` | the start through page 3 |
+   | `3-1` | pages 3, 2, 1 — in that order |
+
+   Ranges are checked as you type against the real page count.
+3. With one PDF, **Extract pages** saves your selection. With several,
+   **Combine … into one** joins them in list order (▲▼ to reorder), and
+   **Save each separately** keeps them apart.
+
+Page content and images are copied in their original compressed form, so nothing
+is re-encoded and quality is preserved exactly. Password-protected PDFs are
+refused with a clear message rather than mangled.
+
+---
+
+## What it accepts
+
+| Input | → JPG / JPEG | → PDF |
+| --- | --- | --- |
+| HEIC, HEIF, PNG, JPEG, TIFF, GIF, BMP, WebP | full quality | image embedded on a page |
+| PDF | first page, ~200 dpi ¹ | copied unchanged |
+| Word (`.docx`, `.doc`, `.rtf`) | first page ¹ ² | first page ¹ ², or a full export ² |
+| Pages, Keynote, Numbers | from the document's stored preview ³ | same ³ |
+
+¹ **First page only.** macOS has no built-in multi-page rasteriser, so
+converting a document *to an image* covers page one. Rows say so, with the real
+page count — you are never silently handed part of a document.
+
+² **Word files.** Only Word itself can produce a true multi-page PDF. Convertly
+uses it only when it is *already running and responsive*: it never launches Word
+behind your back, and if Word is busy or showing a dialog it falls back to a
+rendered first page within a few seconds instead of hanging. Start with
+`python3 run.py --use-word` to let it launch Word when needed.
+
+³ **iWork files.** Pages, Keynote and Numbers store a PDF preview inside their
+own documents, and that is what gets used — no Apple apps required. Documents
+saved without one can't be converted; export them from Pages instead.
+
+---
+
+## Options
+
+```bash
+python3 run.py --port 9000     # use a different port
+python3 run.py --no-browser    # don't open a browser window
+python3 run.py --use-word      # allow launching Word for full document exports
+python3 run.py --verbose       # log each request
+```
+
+---
+
+## Privacy and security
+
+Convertly exists so that converting a personal photo or document doesn't mean
+uploading it to a website.
+
+- **No network calls.** The code imports no HTTP client, and a test enforces it.
+- **No storage.** Files live in memory for one request; the temp directory used
+  for decoding is deleted immediately after. There is no history or cache.
+- **No dependencies**, so no supply chain beyond Python and macOS itself.
+- **Local only.** The server binds `127.0.0.1`, refuses requests with a
+  non-loopback `Host` (which defeats DNS rebinding), and refuses cross-site
+  requests.
+
+Do not expose Convertly through a tunnel or reverse proxy — it is a single-user
+local tool with no authentication. Full detail in [SECURITY.md](SECURITY.md).
+
+---
+
+## Project layout
+
+```
+convertly/
+├── run.py                  start the app without installing anything
+├── Convertly.command       double-clickable launcher for Finder
+├── src/convertly/
+│   ├── server.py           HTTP routes and the command line
+│   ├── convert.py          format detection, conversion, thumbnails, image→PDF
+│   ├── pdfedit.py          PDF parsing, page extraction, joining
+│   └── web/index.html      the whole interface, one file
+├── tests/                  the test suite and a dependency-free coverage report
+└── docs/
+    ├── TESTING.md          test strategy and the coverage floor
+    └── ARCHITECTURE.md     how the pieces fit, and why
+```
+
+Under the hood: `sips` decodes images, Quick Look renders document pages, and
+the PDF reading and writing is plain Python.
+
+---
+
+## Development
+
+```bash
+python3 tests/coverage_report.py --min 85     # full suite plus the coverage floor
+python3 -m unittest discover -s tests -t .    # just the tests
+```
+
+Both run on the standard library alone. See [CONTRIBUTING.md](CONTRIBUTING.md)
+to get started and [docs/TESTING.md](docs/TESTING.md) for what a good test looks
+like here.
+
+---
+
+## Roadmap
+
+- **Rotating or reordering pages within a PDF** — `pdfedit.Builder` already
+  copies pages in any order, so both are small additions.
+- **Combining images into a single PDF** — convert each to PDF, then join them
+  in the Edit PDF tab; a one-step version is a natural next step.
+- **Every page of a PDF as images** — the one real gap. It needs a rendering
+  library such as `pypdfium2`, since macOS ships no multi-page rasteriser. This
+  is the one case with a standing argument for a first dependency.
+
+---
+
+## License
+
+[MIT](LICENSE).

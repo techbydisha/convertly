@@ -1,0 +1,13 @@
+# Convertly has no runtime dependencies.
+#
+# It uses only the Python standard library (3.10 or newer) plus command-line
+# tools that ship with macOS: `sips` for images and `qlmanage` for document
+# previews. There is nothing to install.
+#
+# This file exists so that `pip install -r requirements.txt` is a no-op rather
+# than an error, and so the absence of dependencies is explicit and reviewable.
+#
+# Development needs nothing extra either: the tests and the coverage report both
+# run on the standard library alone. See docs/TESTING.md.
+#
+# Packaging metadata lives in pyproject.toml.

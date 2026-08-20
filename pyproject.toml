@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "convertly"
+version = "1.0.0"
+description = "A local file converter and PDF editor for macOS. Nothing is uploaded or stored."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+# Intentionally empty: Convertly runs on the standard library plus the tools
+# that ship with macOS. Adding a dependency here is a decision worth arguing
+# for in a pull request -- see CONTRIBUTING.md.
+dependencies = []
+
+keywords = ["heic", "converter", "pdf", "macos", "local", "privacy", "offline"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+convertly = "convertly.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+convertly = ["web/*.html"]

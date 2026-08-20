@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest something Convertly should be able to do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Convertly stays deliberately small. The best requests describe the
+        problem you hit rather than the feature you imagine, so there is room to
+        find the simplest answer.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The task you were doing when Convertly could not help.
+      placeholder: I regularly need to turn every page of a PDF into separate images.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would solve it?
+      description: Your suggestion, if you have one. Rough ideas are fine.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What do you do today instead?
+      description: Another app, a website, several manual steps?
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does it fit the project?
+      description: >
+        Convertly makes two promises: nothing leaves your machine, and there is
+        nothing to install. Requests that need either broken are usually
+        declined — see CONTRIBUTING.md.
+      options:
+        - label: This can work entirely offline, on the user's own machine
+        - label: I understand it may need a dependency, and I have said why in the description

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/<owner>/convertly/security/advisories/new
+    about: Report privately. Please do not open a public issue for security problems.
+  - name: Question about using Convertly
+    url: https://github.com/<owner>/convertly/discussions
+    about: Ask in Discussions rather than opening an issue.

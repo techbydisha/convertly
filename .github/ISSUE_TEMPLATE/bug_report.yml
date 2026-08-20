@@ -1,0 +1,109 @@
+name: Bug report
+description: Something went wrong when converting or editing a file
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report.
+
+        **Please do not attach personal files.** If one specific document
+        triggers the bug, describe it instead — how many pages, what created it,
+        whether it came from a scanner or a phone. Only attach a file if you are
+        happy for it to be public forever.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: I converted a HEIC photo to PDF and the page came out blank.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start Convertly with `python3 run.py`
+        2. Drop a photo onto the Convert tab
+        3. Choose PDF and press Convert
+        4. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Convert tab (images, Word, Pages)
+        - Edit PDF tab (page ranges, combining)
+        - Previews or thumbnails
+        - Downloads
+        - Starting the app
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: file-kind
+    attributes:
+      label: What kind of file?
+      description: Format, rough size, page count, and what produced it.
+      placeholder: A 12-page PDF exported from Word, about 4 MB
+    validations:
+      required: true
+
+  - type: input
+    id: message
+    attributes:
+      label: Message shown in the app
+      description: The exact text on the file's row, if there was any.
+      placeholder: Not a readable HEIC image
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "15.2"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python3 -V`
+      placeholder: Python 3.12.4
+    validations:
+      required: true
+
+  - type: textarea
+    id: terminal
+    attributes:
+      label: Terminal output
+      description: >
+        Anything printed in the terminal running Convertly. Restarting with
+        `python3 run.py --verbose` logs each request.
+      render: shell
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: >
+        Optional but very helpful. In Safari or Chrome, open the developer
+        console and copy any red errors.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I have not attached a file containing personal information
+          required: true
+        - label: I searched existing issues for this problem
+          required: true

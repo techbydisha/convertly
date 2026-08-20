@@ -1,0 +1,95 @@
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Virtual environments -------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# --- Test and coverage output --------------------------------------------
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.pytest_cache/
+.tox/
+*.cover
+,*.cover
+
+# --- Local tool settings --------------------------------------------------
+# Personal, machine-specific settings. Do not rely on a global gitignore for
+# these -- what one machine hides, another will happily commit.
+.claude/settings.local.json
+.claude/*.local.json
+.aider*
+.cursorignore
+
+# --- Editors and tooling --------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.ruff_cache/
+.mypy_cache/
+
+# --- macOS ----------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Secrets: never commit any of these -----------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials.json
+secrets.json
+*_rsa
+*_dsa
+*_ed25519
+
+# --- User files -----------------------------------------------------------
+# Convertly handles personal photos and documents. Nothing you convert should
+# ever end up in the repository, and test fixtures are generated, not stored.
+scratch/
+samples/
+out/
+*.heic
+*.heif
+*.HEIC
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+*.gif
+*.bmp
+*.webp
+*.pdf
+*.doc
+*.docx
+*.rtf
+*.pages
+*.key
+*.numbers
+# Allow images that are genuinely part of the project's documentation:
+!docs/images/*.png
+!docs/images/*.jpg
