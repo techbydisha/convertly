@@ -33,7 +33,14 @@ def backslashes_in_fstring_expressions(path):
     """
     with open(path, encoding="utf-8") as fh:
         source = fh.read()
-    tree = ast.parse(source, path)
+    # On Python 3.10 and 3.11 this very pattern is a SyntaxError, so a file
+    # containing it cannot be parsed at all. That is the finding.
+    try:
+        tree = ast.parse(source, path)
+    except SyntaxError as exc:
+        if "backslash" in str(exc):
+            return [(exc.lineno or 0, str(exc))]
+        raise
     found = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.JoinedStr):
@@ -89,6 +96,18 @@ class MinimumPythonVersion(unittest.TestCase):
                             "the check failed to spot a backslash in an f-string")
         finally:
             os.unlink(path)
+
+    def test_offenders_are_reported_on_every_python(self):
+        """The report must work whether or not the host can parse the file."""
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write("x = f\"{'a' + chr(92)}\"\n")      # no backslash literal
+            clean = fh.name
+        try:
+            self.assertEqual(backslashes_in_fstring_expressions(clean), [])
+        finally:
+            os.unlink(clean)
 
 
 if __name__ == "__main__":

@@ -115,7 +115,14 @@ def main():
 
     ok = result.wasSuccessful()
     if not ok:
-        print("\nTESTS FAILED", file=sys.stderr)
+        # Test output is captured so it doesn't drown the coverage table, which
+        # means failures have to be reported explicitly or CI shows nothing.
+        print("\nTESTS FAILED\n", file=sys.stderr)
+        for label, group in (("FAIL", result.failures), ("ERROR", result.errors)):
+            for test, traceback_text in group:
+                print(f"{label}: {test}", file=sys.stderr)
+                print(traceback_text.rstrip(), file=sys.stderr)
+                print("-" * 70, file=sys.stderr)
     if args.min is not None and total_pct < args.min:
         print(f"\nCoverage {total_pct:.1f}% is below the required {args.min:.1f}%",
               file=sys.stderr)
