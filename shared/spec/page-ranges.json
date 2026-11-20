@@ -1,0 +1,32 @@
+{
+  "description": "Page range syntax. 'spec' is what the user types, 'total' is the document's page count, 'pages' is the 1-based result in order.",
+  "valid": [
+    { "spec": "",          "total": 5, "pages": [1, 2, 3, 4, 5], "why": "blank means every page" },
+    { "spec": "all",       "total": 5, "pages": [1, 2, 3, 4, 5], "why": "the word 'all' works too" },
+    { "spec": "ALL",       "total": 5, "pages": [1, 2, 3, 4, 5], "why": "case is ignored" },
+    { "spec": "  2-4  ",   "total": 5, "pages": [2, 3, 4],       "why": "surrounding spaces are trimmed" },
+    { "spec": "3",         "total": 5, "pages": [3] },
+    { "spec": "2-4",       "total": 5, "pages": [2, 3, 4] },
+    { "spec": "1-5",       "total": 5, "pages": [1, 2, 3, 4, 5] },
+    { "spec": "1,3,5",     "total": 5, "pages": [1, 3, 5],       "why": "commas select individual pages" },
+    { "spec": "1, 3",      "total": 5, "pages": [1, 3],          "why": "spaces after commas are fine" },
+    { "spec": "1 3",       "total": 5, "pages": [1, 3],          "why": "spaces alone separate too" },
+    { "spec": "2-",        "total": 5, "pages": [2, 3, 4, 5],    "why": "open end means 'to the end'" },
+    { "spec": "-3",        "total": 5, "pages": [1, 2, 3],       "why": "open start means 'from page 1'" },
+    { "spec": "3-1",       "total": 5, "pages": [3, 2, 1],       "why": "a descending range reverses the pages" },
+    { "spec": "1-2,4-5",   "total": 5, "pages": [1, 2, 4, 5] },
+    { "spec": "5",         "total": 5, "pages": [5],             "why": "the last page is in range" },
+    { "spec": "1",         "total": 1, "pages": [1] },
+    { "spec": "2,2",       "total": 5, "pages": [2, 2],          "why": "repeats are kept, not collapsed" }
+  ],
+  "invalid": [
+    { "spec": "0",     "total": 5, "message_contains": "start at 1", "why": "pages are 1-based" },
+    { "spec": "-0",    "total": 5, "message_contains": "start at 1" },
+    { "spec": "6",     "total": 5, "message_contains": "5 pages",    "why": "the message names the real page count" },
+    { "spec": "2-9",   "total": 5, "message_contains": "5 pages" },
+    { "spec": "2",     "total": 1, "message_contains": "1 page",     "why": "singular for a one-page document" },
+    { "spec": "abc",   "total": 5, "message_contains": "read" },
+    { "spec": "1-2-3", "total": 5, "message_contains": "read" },
+    { "spec": "x-y",   "total": 5, "message_contains": "read" }
+  ]
+}

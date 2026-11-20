@@ -1,0 +1,57 @@
+name: deploy web
+
+# Manual only for now. The browser build is a skeleton, and GitHub Pages has to
+# be switched on first: Settings -> Pages -> Source -> GitHub Actions. Once it
+# is on and there is something worth publishing, uncomment the push trigger.
+#
+# Note the site is served from web/, not /docs -- /docs holds this project's
+# documentation, and "deploy from a branch" only offers the repository root or
+# /docs. Deploying through Actions is what allows any directory.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'web/**'
+  #     - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deployments race; let a running one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to publish anything that reaches off-origin
+        run: |
+          # The whole point of this build is that files stay on the device.
+          # A stray CDN link or an absolute http(s) asset would break that, so
+          # fail the deploy rather than ship it.
+          if grep -rnE '(src|href)=["'"'"']https?://' web/ --include='*.html' --include='*.js'; then
+            echo "::error::web/ references a remote asset; vendor it instead (see web/vendor/README.md)"
+            exit 1
+          fi
+          if ! grep -q "Content-Security-Policy" web/index.html; then
+            echo "::error::web/index.html has no Content Security Policy"
+            exit 1
+          fi
+          echo "no remote assets, CSP present"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

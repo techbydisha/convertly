@@ -201,9 +201,14 @@ def _fit_jpeg(src: str, tmpdir: str, quality: int,
 
 
 def _human_size(count: int) -> str:
-    """Decimal units, the way Finder shows file sizes on macOS."""
+    """Decimal units, the way Finder shows file sizes on macOS.
+
+    Rounds half up with floor(x + 0.5) rather than round(), which rounds half
+    to even: round(2.5) is 2 in Python but Math.round(2.5) is 3 in JavaScript,
+    and the two front ends have to agree. See shared/spec/file-sizes.json.
+    """
     if count < 1_000_000:
-        return f"{max(1, round(count / 1000))} KB"
+        return f"{max(1, math.floor(count / 1000 + 0.5))} KB"
     return f"{count / 1_000_000:.1f} MB"
 
 

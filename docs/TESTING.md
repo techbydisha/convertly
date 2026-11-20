@@ -28,8 +28,35 @@ in**. Everything below follows from that.
 | PDF engine | `tests/test_pdfedit.py` | Parsing, page ranges, extraction, joining, damaged files, resource limits |
 | Conversion | `tests/test_convert.py` | Format detection, the conversion matrix, thumbnails, the image-to-PDF writer |
 | HTTP surface | `tests/test_server.py` | Every route, status codes, headers, malformed requests, CLI parsing |
+| Shared behaviour | `tests/test_shared_spec.py` | The contract both builds satisfy, from `shared/spec/*.json` |
 | Security | `tests/test_security.py` | Network exposure, request origin, hostile filenames and files, no persistence, no secrets |
 | Browser UI | manual — see [Manual checks](#manual-checks) | Drag and drop, tab switching, previews, download behaviour |
+
+## The shared spec
+
+Convertly has two front ends — the macOS app in Python and the browser build in
+JavaScript — and the risk that matters is **silent divergence**: `2-4` selecting
+different pages depending on which one you opened, or a file arriving with a
+different name.
+
+[`shared/spec/`](../shared/spec/) holds that contract as JSON, and both suites
+run against the same cases. Neither side can drift without a test going red.
+
+| File | Pins down |
+| --- | --- |
+| `page-ranges.json` | Every accepted and rejected range form |
+| `output-names.json` | What produced files are called, including hostile inputs |
+| `file-sizes.json` | How byte counts are shown |
+| `file-kinds.json` | Which extensions are accepted, and which the browser can handle |
+
+It earns its keep. Writing it immediately exposed a live inconsistency: 2500
+bytes rendered as "2 KB" in Python and "3 KB" in JavaScript, because Python's
+`round()` rounds half to even while `Math.round()` rounds half up. Python now
+uses `floor(x + 0.5)`, and `file-sizes.json` pins the case so it cannot come
+back.
+
+**Changing user-visible behaviour starts here**: add the case, watch both sides
+fail, then fix both.
 
 ## Minimum coverage
 
@@ -104,7 +131,7 @@ with the standard library only:
 python3 tests/coverage_report.py --min 85
 ```
 
-At the time of writing: **87.7%** across 164 tests, in about 22 seconds.
+At the time of writing: **87.6%** across 179 tests, in about 22 seconds.
 
 `convert.py` sits lower than the others (~81%) on purpose. The uncovered lines
 are the Microsoft Word automation path, which cannot be exercised without

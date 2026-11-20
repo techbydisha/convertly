@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The privacy guarantee, enforced by the browser rather than promised in a README.
+
+  connect-src 'self' allows this page to load its own scripts, styles and the
+  HEIC decoder's WebAssembly, and nothing else. There is no server behind this
+  origin -- GitHub Pages only serves static files -- so there is nowhere for a
+  file to be sent even in principle.
+
+  If the vendored decoder build inlines its WebAssembly rather than fetching it,
+  tighten this to connect-src 'none', which removes the capability entirely.
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' blob: data:;
+  connect-src 'self';
+  form-action 'none';
+  frame-ancestors 'none';
+  base-uri 'none'">
+<title>Convertly</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #ffffff; --text: #1c1b19; --muted: #6f6d68;
+    --line: #e2e0da; --accent: #c2643a; --accent-soft: #f6ece6; --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17161a; --card: #201f24; --text: #ecebe8; --muted: #9a978f;
+      --line: #33313a; --accent: #e08757; --accent-soft: #2c2420;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 48px 20px 60px; background: var(--bg); color: var(--text);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
+  .panel {
+    margin-top: 28px; background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 26px;
+  }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
+  li { margin-bottom: 5px; }
+  a { color: var(--accent); }
+  code {
+    font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--accent-soft); padding: 1px 5px; border-radius: 5px;
+  }
+  footer { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Convertly</h1>
+  <div class="sub">Convert images and documents, and edit PDFs — entirely inside your browser.</div>
+
+  <div class="panel">
+    <h2>Not built yet</h2>
+    <p style="margin:0;color:var(--muted);font-size:14px">
+      This is the browser build. The structure is in place; the conversion code
+      is being ported. The macOS app is ready to use today — see the
+      <a href="https://github.com/techbydisha/convertly">repository</a>.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>How your files will be handled</h2>
+    <ul>
+      <li>Everything runs in this page. Files are read by JavaScript on your device.</li>
+      <li>There is no server to upload to — this page is static files only.</li>
+      <li>A Content Security Policy blocks any connection off this origin.</li>
+      <li>Once it works offline, you can turn off your network and still convert.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h2>What will work here</h2>
+    <ul>
+      <li>HEIC, PNG, JPEG, GIF, BMP, WebP → JPG, JPEG or PDF</li>
+      <li>Resizing, and fitting a picture under a size limit</li>
+      <li>PDF pages → images, and pulling pages out of or joining PDFs</li>
+      <li>Pages, Keynote and Numbers, via the preview stored inside them</li>
+      <li>Word files stay in the macOS app — <code>qlmanage</code> has no browser equivalent</li>
+    </ul>
+  </div>
+
+  <footer>No uploads. No accounts. No tracking.</footer>
+</div>
+</body>
+</html>

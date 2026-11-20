@@ -90,6 +90,9 @@ out/
 *.pages
 *.key
 *.numbers
-# Allow images that are genuinely part of the project's documentation:
+# Allow files that are genuinely part of the project rather than someone's
+# photos. Without these, a favicon or a vendored library is dropped silently.
 !docs/images/*.png
 !docs/images/*.jpg
+!web/assets/**
+!web/vendor/**

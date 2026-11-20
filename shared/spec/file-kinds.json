@@ -1,0 +1,47 @@
+{
+  "description": "Which files are accepted, and how each is handled. 'kind' null means the file is rejected rather than guessed at.",
+  "kinds": {
+    "image": "decoded as a picture",
+    "pdf":   "read as a PDF",
+    "word":  "a Word document",
+    "iwork": "Pages, Keynote or Numbers"
+  },
+  "browser_support": {
+    "note": "Which kinds the browser build can handle. Word has no browser equivalent and is local-only.",
+    "image": true,
+    "pdf": true,
+    "iwork": true,
+    "word": false
+  },
+  "cases": [
+    { "name": "a.heic",    "kind": "image" },
+    { "name": "a.HEIC",    "kind": "image", "why": "extensions are case-insensitive" },
+    { "name": "a.heif",    "kind": "image" },
+    { "name": "a.png",     "kind": "image" },
+    { "name": "a.jpg",     "kind": "image" },
+    { "name": "a.jpeg",    "kind": "image" },
+    { "name": "a.tif",     "kind": "image" },
+    { "name": "a.tiff",    "kind": "image" },
+    { "name": "a.gif",     "kind": "image" },
+    { "name": "a.bmp",     "kind": "image" },
+    { "name": "a.webp",    "kind": "image" },
+    { "name": "a.pdf",     "kind": "pdf" },
+    { "name": "a.PDF",     "kind": "pdf" },
+    { "name": "a.doc",     "kind": "word" },
+    { "name": "a.docx",    "kind": "word" },
+    { "name": "a.rtf",     "kind": "word" },
+    { "name": "a.pages",   "kind": "iwork" },
+    { "name": "a.key",     "kind": "iwork" },
+    { "name": "a.numbers", "kind": "iwork" },
+    { "name": "a.zip",     "kind": null },
+    { "name": "a.exe",     "kind": null },
+    { "name": "a",         "kind": null },
+    { "name": "",          "kind": null },
+    { "name": "a.pdf.exe", "kind": null, "why": "only the real extension counts, never one earlier in the name" }
+  ],
+  "output_formats": [
+    { "format": "jpg",  "extension": "jpg",  "mime": "image/jpeg" },
+    { "format": "jpeg", "extension": "jpeg", "mime": "image/jpeg", "why": "identical bytes to jpg, different extension" },
+    { "format": "pdf",  "extension": "pdf",  "mime": "application/pdf" }
+  ]
+}

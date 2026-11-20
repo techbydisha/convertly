@@ -8,12 +8,21 @@ the aim is to keep it that way.
 1. **Nothing leaves the user's machine.** No network calls, no telemetry, no
    remote assets in the UI — not even a web font. If a change needs the network,
    it does not belong here.
-2. **No dependencies.** Convertly runs on the Python standard library plus tools
-   that ship with macOS. "There is nothing to install" is a feature, not an
-   accident. A dependency is not forbidden forever, but adding one needs an
-   argument in the pull request for why the problem cannot be solved without it.
-   (`pypdfium2`, for rendering every page of a PDF as an image, is the one case
-   with a standing case for it — see the README.)
+2. **No dependencies in the macOS app.** It runs on the Python standard library
+   plus tools that ship with macOS. "There is nothing to install" is a feature,
+   not an accident, and CI enforces it. A dependency is not forbidden forever,
+   but adding one needs an argument in the pull request for why the problem
+   cannot be solved without it.
+
+   The browser build in `web/` cannot make the same promise — decoding HEIC in a
+   browser needs a WebAssembly library. Its narrower rule is in
+   [`web/vendor/README.md`](web/vendor/README.md): vendored and committed, never
+   a CDN, no bundler, no build step.
+
+3. **Both builds behave identically.** Anything user-visible — page ranges,
+   filenames, size formatting, which files are accepted — is pinned in
+   [`shared/spec/`](shared/spec/) and tested on both sides. Change the spec
+   first, then make both satisfy it.
 
 ## Getting set up
 

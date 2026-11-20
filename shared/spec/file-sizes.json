@@ -1,0 +1,22 @@
+{
+  "description": "How a byte count is shown. Decimal units, matching Finder and the limits upload sites quote: 1 MB is 1,000,000 bytes.",
+  "rounding": "half up - floor(x + 0.5). Python's round() rounds half to even and must not be used here.",
+  "cases": [
+    { "bytes": 0,       "text": "1 KB",    "why": "never show '0 KB' for a real file" },
+    { "bytes": 1,       "text": "1 KB" },
+    { "bytes": 999,     "text": "1 KB" },
+    { "bytes": 1000,    "text": "1 KB" },
+    { "bytes": 1499,    "text": "1 KB" },
+    { "bytes": 1500,    "text": "2 KB",    "why": "half rounds up" },
+    { "bytes": 2500,    "text": "3 KB",    "why": "the case where banker's rounding would say 2 KB" },
+    { "bytes": 3500,    "text": "4 KB" },
+    { "bytes": 294675,  "text": "295 KB" },
+    { "bytes": 999499,  "text": "999 KB" },
+    { "bytes": 999500,  "text": "1000 KB", "why": "still KB just below the MB boundary" },
+    { "bytes": 999999,  "text": "1000 KB" },
+    { "bytes": 1000000, "text": "1.0 MB",  "why": "one decimal place from here up" },
+    { "bytes": 1049999, "text": "1.0 MB" },
+    { "bytes": 5030000, "text": "5.0 MB" },
+    { "bytes": 7700000, "text": "7.7 MB" }
+  ]
+}

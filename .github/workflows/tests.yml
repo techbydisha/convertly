@@ -1,9 +1,30 @@
 name: tests
 
 on:
+  # Path filters keep the macOS runner out of changes that cannot affect it --
+  # a tweak to web/ or the README should not spend macOS minutes. shared/ is
+  # included because the spec there drives the Python tests.
+  # (listed twice rather than using a YAML anchor: GitHub Actions does not
+  # support anchors in workflow files)
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'shared/**'
+      - 'run.py'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - '.github/workflows/tests.yml'
   pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'shared/**'
+      - 'run.py'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - '.github/workflows/tests.yml'
   workflow_dispatch:
 
 permissions:

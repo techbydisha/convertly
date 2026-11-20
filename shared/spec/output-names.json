@@ -1,0 +1,27 @@
+{
+  "description": "What a produced file is called. The input name comes from the page and is untrusted: path separators, control characters and leading dots must never survive into the result.",
+  "combined_name": "combined.pdf",
+  "fallback_stem": "file",
+  "converted": [
+    { "input": "My Photo.HEIC",             "ext": "jpg",  "name": "My Photo.jpg",  "why": "spaces and case are preserved" },
+    { "input": "photo.heic",                "ext": "pdf",  "name": "photo.pdf" },
+    { "input": "a.b.c.png",                 "ext": "jpeg", "name": "a.b.c.jpeg",    "why": "only the last extension is replaced" },
+    { "input": "noext",                     "ext": "jpg",  "name": "noext.jpg" },
+    { "input": "",                          "ext": "jpg",  "name": "file.jpg",      "why": "an empty name falls back" },
+    { "input": ".heic",                     "ext": "jpg",  "name": "heic.jpg",      "why": "a leading dot is not an extension" },
+    { "input": "  spaced  .png",            "ext": "jpg",  "name": "spaced.jpg",    "why": "surrounding spaces are trimmed" },
+    { "input": "../../etc/passwd.heic",     "ext": "jpg",  "name": "passwd.jpg",    "why": "directory traversal is stripped" },
+    { "input": "/etc/passwd.heic",          "ext": "jpg",  "name": "passwd.jpg" },
+    { "input": "..\\..\\windows\\evil.heic", "ext": "jpg", "name": "evil.jpg",      "why": "backslashes are separators here too" },
+    { "input": "a\u0000null.heic",          "ext": "jpg",  "name": "anull.jpg",     "why": "control characters are removed" }
+  ],
+  "extracted": [
+    { "input": "Annual Report.pdf", "spec": "2-4",  "name": "Annual Report-pages-2-4.pdf" },
+    { "input": "Report.pdf",        "spec": "",     "name": "Report-copy.pdf",  "why": "no range means the whole document" },
+    { "input": "x.pdf",             "spec": "  ",   "name": "x-copy.pdf" },
+    { "input": "doc.pdf",           "spec": "1,3",  "name": "doc-pages-1_3.pdf", "why": "separators become underscores" },
+    { "input": "doc.pdf",           "spec": "1, 3", "name": "doc-pages-1_3.pdf" },
+    { "input": "doc.pdf",           "spec": "2-",   "name": "doc-pages-2-.pdf" },
+    { "input": "a/b/c.pdf",         "spec": "1",    "name": "c-pages-1.pdf" }
+  ]
+}

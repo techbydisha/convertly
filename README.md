@@ -4,8 +4,25 @@ A local file converter and PDF editor for macOS. Convert images and documents to
 **JPG**, **JPEG** or **PDF**, resize pictures to fit a size limit, pull pages out
 of a PDF, and join PDFs together.
 
-Everything runs on your own Mac. Nothing is uploaded, nothing is stored, and
+Everything runs on your own device. Nothing is uploaded, nothing is stored, and
 there is nothing to install.
+
+## Two ways to run it
+
+| | [macOS app](#install) | [Browser build](web/) |
+| --- | --- | --- |
+| Where | your Mac | any device, hosted as a static page |
+| Files | never leave the machine | never leave the browser — there is no server |
+| Images, PDFs, Pages/Keynote/Numbers | yes | yes |
+| Word documents | yes | no — `qlmanage` has no browser equivalent |
+| PDF pages as images | first page | every page |
+| Install | nothing | nothing |
+
+Both are in this repository and must behave identically: the same page ranges,
+the same filenames, the same sizes. Those rules are pinned in
+[`shared/spec/`](shared/spec/) and both test suites run against them.
+
+The browser build is a skeleton today — the macOS app below is the one to use.
 
 ---
 
@@ -157,13 +174,16 @@ local tool with no authentication. Full detail in [SECURITY.md](SECURITY.md).
 
 ```
 convertly/
-├── run.py                  start the app without installing anything
+├── run.py                  start the macOS app without installing anything
 ├── Convertly.command       double-clickable launcher for Finder
 ├── src/convertly/
 │   ├── server.py           HTTP routes and the command line
 │   ├── convert.py          format detection, conversion, thumbnails, image→PDF
 │   ├── pdfedit.py          PDF parsing, page extraction, joining
-│   └── web/index.html      the whole interface, one file
+│   ├── naming.py           what produced files are called
+│   └── web/index.html      the macOS app's interface, one file
+├── web/                    the browser build, deployed to GitHub Pages
+├── shared/spec/            behaviour both builds must satisfy
 ├── tests/                  the test suite and a dependency-free coverage report
 └── docs/
     ├── TESTING.md          test strategy and the coverage floor

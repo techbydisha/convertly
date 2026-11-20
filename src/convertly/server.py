@@ -20,6 +20,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import convert as convert_mod
+from . import naming
 from . import pdfedit
 from .convert import (
     INPUT_EXTS,
@@ -241,7 +242,6 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         name = self._filename()
-        stem = os.path.splitext(os.path.basename(name))[0] or "file"
 
         try:
             result, ext, note = convert(data, name, out_format, quality,
@@ -253,7 +253,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, f"Conversion failed: {exc}".encode("utf-8"))
             return
 
-        headers = {"X-Out-Name": urllib.parse.quote(f"{stem}.{ext}")}
+        headers = {"X-Out-Name": urllib.parse.quote(naming.converted_name(name, ext))}
         if note:
             headers["X-Note"] = urllib.parse.quote(note)
         self._send(200, result, MIME[out_format], headers)
