@@ -40,4 +40,7 @@ def extract_name(filename: str, spec: str) -> str:
     spec = (spec or "").strip()
     if not spec:
         return f"{stem}-copy.pdf"
-    return f"{stem}-pages-{re.sub(r'[,\s]+', '_', spec)}.pdf"
+    # Kept out of the f-string: a backslash inside an f-string expression is a
+    # syntax error before Python 3.12, and this project supports 3.10.
+    tidy = re.sub(r"[,\s]+", "_", spec)
+    return f"{stem}-pages-{tidy}.pdf"
