@@ -174,6 +174,41 @@ def make_image(fmt="heic", width=64, height=48):
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def make_noisy_image(fmt="jpeg", width=500, height=400, seed=7):
+    """A detailed image that does not compress away.
+
+    Smooth gradients shrink to almost nothing, which makes size-budget tests
+    meaningless. Random pixels behave like a real photograph.
+    """
+    key = ("noisy", fmt, width, height, seed)
+    if key in _image_cache:
+        return _image_cache[key]
+    if not HAS_SIPS:
+        raise unittest.SkipTest("needs macOS `sips`")
+    import random
+    import subprocess
+    rng = random.Random(seed)
+    pixels = bytes(rng.randrange(256) for _ in range(width * height * 3))
+    tmpdir = tempfile.mkdtemp(prefix="convertly-test-")
+    try:
+        ppm = os.path.join(tmpdir, "src.ppm")
+        with open(ppm, "wb") as fh:
+            fh.write(b"P6\n%d %d\n255\n" % (width, height) + pixels)
+        dst = os.path.join(tmpdir, "out." + fmt)
+        proc = subprocess.run(
+            ["sips", "-s", "format", {"jpg": "jpeg"}.get(fmt, fmt),
+             "-s", "formatOptions", "100", ppm, "--out", dst],
+            capture_output=True,
+        )
+        if proc.returncode != 0 or not os.path.exists(dst):
+            raise unittest.SkipTest(f"sips cannot produce {fmt} here")
+        with open(dst, "rb") as fh:
+            _image_cache[key] = fh.read()
+        return _image_cache[key]
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def make_docx(paragraphs=("Heading", "Body text")):
     """A minimal but structurally valid .docx."""
     import zipfile

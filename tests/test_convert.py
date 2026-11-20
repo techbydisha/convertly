@@ -7,6 +7,7 @@ from convertly import convert as conv
 
 from .helpers import (
     make_docx,
+    make_noisy_image,
     make_image,
     make_iwork,
     make_pdf,
@@ -197,3 +198,114 @@ class Thumbnails(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@requires_sips
+class Resizing(unittest.TestCase):
+    """Capping the longest edge."""
+
+    def dimensions(self, jpeg):
+        width, height, _ = conv._jpeg_size(jpeg)
+        return width, height
+
+    def test_longest_edge_is_capped(self):
+        out, _, _ = conv.convert(make_image("heic", 400, 300), "p.heic", "jpg", max_px=200)
+        self.assertEqual(self.dimensions(out), (200, 150))
+
+    def test_aspect_ratio_is_kept_for_tall_images(self):
+        out, _, _ = conv.convert(make_image("heic", 300, 400), "p.heic", "jpg", max_px=200)
+        self.assertEqual(self.dimensions(out), (150, 200))
+
+    def test_images_are_never_enlarged(self):
+        """`sips -Z` would happily upscale; resizing must only ever shrink."""
+        source = make_image("heic", 400, 300)
+        out, _, note = conv.convert(source, "p.heic", "jpg", max_px=4000)
+        self.assertEqual(self.dimensions(out), (400, 300))
+        self.assertIsNone(note, "nothing changed, so there is nothing to report")
+
+    def test_resize_is_reported(self):
+        _, _, note = conv.convert(make_image("heic", 400, 300), "p.heic", "jpg", max_px=200)
+        self.assertIn("200", note)
+        self.assertIn("150", note)
+
+    def test_resize_applies_to_pdf_output_too(self):
+        out, _, _ = conv.convert(make_image("heic", 400, 300), "p.heic", "pdf", max_px=200)
+        self.assertTrue(out.startswith(b"%PDF"))
+        self.assertLess(len(out), len(conv.convert(make_image("heic", 400, 300),
+                                                   "p.heic", "pdf")[0]))
+
+
+@requires_sips
+class SizeBudget(unittest.TestCase):
+    """Squeezing a file under a maximum size -- the upload-limit case."""
+
+    def setUp(self):
+        self.photo = make_noisy_image("heic", 500, 400)
+
+    def test_result_fits_the_budget(self):
+        for budget in (200_000, 100_000, 50_000, 20_000):
+            with self.subTest(budget=budget):
+                out, _, note = conv.convert(self.photo, "p.heic", "jpg",
+                                            target_bytes=budget)
+                self.assertLessEqual(len(out), budget,
+                                     f"{len(out)} bytes exceeds the {budget} budget: {note}")
+
+    def test_quality_is_lowered_before_dimensions_are(self):
+        """A mild budget should keep full size and just compress harder."""
+        full, _, _ = conv.convert(self.photo, "p.heic", "jpg", quality=95)
+        budget = int(len(full) * 0.7)
+        out, _, note = conv.convert(self.photo, "p.heic", "jpg", quality=95,
+                                    target_bytes=budget)
+        self.assertLessEqual(len(out), budget)
+        self.assertEqual(conv._jpeg_size(out)[:2], conv._jpeg_size(full)[:2])
+        self.assertIn("uality", note)
+
+    def test_dimensions_shrink_when_quality_is_not_enough(self):
+        out, _, note = conv.convert(self.photo, "p.heic", "jpg", target_bytes=15_000)
+        self.assertLessEqual(len(out), 15_000)
+        self.assertLess(conv._jpeg_size(out)[0], 500)
+        self.assertIn("Resized", note)
+
+    def test_a_file_already_under_the_budget_is_left_alone(self):
+        plain, _, _ = conv.convert(make_image("heic", 80, 60), "p.heic", "jpg")
+        out, _, note = conv.convert(make_image("heic", 80, 60), "p.heic", "jpg",
+                                    target_bytes=5_000_000)
+        self.assertEqual(out, plain)
+        self.assertIsNone(note)
+
+    def test_impossible_budget_returns_the_smallest_and_says_so(self):
+        out, _, note = conv.convert(self.photo, "p.heic", "jpg", target_bytes=1200)
+        self.assertTrue(out.startswith(JPEG_MAGIC), "a usable image is still returned")
+        self.assertIn("Could not reach", note)
+
+    def test_the_search_is_bounded(self):
+        """An impossible budget must not loop forever."""
+        import time
+        start = time.time()
+        conv.convert(self.photo, "p.heic", "jpg", target_bytes=1000)
+        self.assertLess(time.time() - start, 30)
+
+    def test_budget_and_resize_together(self):
+        out, _, _ = conv.convert(self.photo, "p.heic", "jpg",
+                                 max_px=300, target_bytes=20_000)
+        self.assertLessEqual(len(out), 20_000)
+        self.assertLessEqual(conv._jpeg_size(out)[0], 300)
+
+    def test_pdf_output_respects_the_budget_including_its_wrapper(self):
+        budget = 60_000
+        out, _, _ = conv.convert(self.photo, "p.heic", "pdf", target_bytes=budget)
+        self.assertTrue(out.startswith(b"%PDF"))
+        self.assertLessEqual(len(out), budget,
+                             "the PDF wrapper must be counted against the budget")
+
+    @requires_quicklook
+    def test_budget_applies_to_rendered_documents(self):
+        out, _, note = conv.convert(make_pdf(("One", "Two")), "d.pdf", "jpg",
+                                    target_bytes=25_000)
+        self.assertLessEqual(len(out), 25_000)
+        self.assertIn("First page only", note)
+
+    def test_sizes_are_reported_in_decimal_units(self):
+        """Finder and upload limits both mean 1 MB = 1,000,000 bytes."""
+        self.assertEqual(conv._human_size(1_000_000), "1.0 MB")
+        self.assertEqual(conv._human_size(500_000), "500 KB")

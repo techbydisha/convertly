@@ -1,7 +1,8 @@
 # Convertly
 
 A local file converter and PDF editor for macOS. Convert images and documents to
-**JPG**, **JPEG** or **PDF**, pull pages out of a PDF, and join PDFs together.
+**JPG**, **JPEG** or **PDF**, resize pictures to fit a size limit, pull pages out
+of a PDF, and join PDFs together.
 
 Everything runs on your own Mac. Nothing is uploaded, nothing is stored, and
 there is nothing to install.
@@ -44,6 +45,28 @@ from anywhere.
 3. Choose a format and quality, then press **Convert**.
 4. Each row shows the result — its new name and size — with a **Download**
    button. **Download all** saves the batch; **Clear** empties the list.
+
+### Making a picture smaller
+
+*"The upload only allows 1 MB and my photo is 5 MB."*
+
+Set **Max file size** to `1 MB` and press **Convert**. Convertly finds the best
+image that fits: it compresses harder first, and only shrinks the dimensions if
+compression alone isn't enough. The row tells you what it did — for example
+`5.0 MB → 991 KB · Resized to 1994×1495, quality 61`.
+
+Sizes are shown the way Finder shows them (1 MB = 1,000,000 bytes), which is
+what upload limits normally mean.
+
+- **Max file size** — presets from 200 KB to 10 MB, or **Custom…** to type your
+  own (`750 KB`, `1.5 MB`, `900000 B`; a bare number means KB). While a size
+  limit is set, quality is chosen automatically and the slider shows `auto`.
+- **Resize** — cap the longest edge instead, if you know the dimensions you
+  want. Pictures are only ever shrunk, never enlarged.
+
+You can use both together: *longest edge 1600 px, and under 500 KB*. If a limit
+turns out to be impossible, you still get the smallest version Convertly could
+make, and the row says so rather than pretending it worked.
 
 Nothing converts until you press **Convert**. Changing the format or quality
 afterwards clears the results and waits for you to press it again, so what you
@@ -167,6 +190,8 @@ like here.
 
 ## Roadmap
 
+- **Resizing to exact dimensions** (e.g. 1080×1080 with cropping) — today the
+  longest edge is capped and the aspect ratio always kept.
 - **Rotating or reordering pages within a PDF** — `pdfedit.Builder` already
   copies pages in any order, so both are small additions.
 - **Combining images into a single PDF** — convert each to PDF, then join them

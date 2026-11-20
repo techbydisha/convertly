@@ -56,6 +56,8 @@ its row is still true.
 | Images | each input format to each output format; quality affects size; corrupt input raises |
 | Documents | PDF→PDF copied unchanged; PDF→image warns with the true page count; single-page needs no warning; Word falls back and says so; iWork uses the embedded preview |
 | Image PDFs | the original JPEG bytes are embedded (never recompressed); page orientation follows the image |
+| Resizing | longest edge capped; aspect ratio kept for tall and wide images; images never enlarged; applies to PDF output too |
+| Size budgets | the result fits, across several budgets; quality is spent before dimensions; dimensions shrink when quality is not enough; a file already under budget is untouched; an impossible budget returns the smallest attempt and says so; the search is bounded in time; the PDF wrapper counts against the budget |
 | Thumbnails | one per supported kind; unsupported and broken input return `None`, never raise |
 | Guards | unknown output format, empty input, oversized input, unsupported type |
 
@@ -69,6 +71,7 @@ its row is still true.
 | Framing | `/pdf/build`'s length-prefixed body: valid, malformed, too short, mismatched range count |
 | Robustness | every handler survives an unexpected exception in the code it calls, and the server keeps serving afterwards |
 | CLI | defaults, every flag, unknown flags rejected, port fallback when the preferred port is taken |
+| Size options | `max_px` and `target` resize and squeeze; nonsense values are ignored rather than fatal; absent options leave the image untouched |
 
 ### Security (`tests/test_security.py`)
 
@@ -101,7 +104,7 @@ with the standard library only:
 python3 tests/coverage_report.py --min 85
 ```
 
-At the time of writing: **87.3%** across 144 tests, in about 9 seconds.
+At the time of writing: **87.7%** across 164 tests, in about 22 seconds.
 
 `convert.py` sits lower than the others (~81%) on purpose. The uncovered lines
 are the Microsoft Word automation path, which cannot be exercised without
@@ -135,6 +138,8 @@ Before a release, run `python3 run.py` and confirm:
 - [ ] Nothing converts until **Convert** is pressed
 - [ ] Changing format or quality clears results and waits for another press
 - [ ] Downloaded files open correctly and match their preview
+- [ ] **Max file size** of 1 MB on a large photo produces a file under 1 MB, and the row explains what changed
+- [ ] Setting a size limit shows `auto` beside the quality slider and dims it
 - [ ] **Edit PDF**: page count is right, `2-4` produces exactly those pages, an invalid range blocks the button
 - [ ] Combining two PDFs respects the ▲▼ order
 - [ ] The browser console is free of errors
@@ -183,6 +188,7 @@ Each of these was a real defect. The test named beside it is the guard.
 | Quick Look ground for 90 seconds on iWork files before failing | `Thumbnails.test_iwork_thumbnail_uses_embedded_preview` |
 | Word automation hung for 90 seconds behind a modal dialog | `test_word_conversion_never_launches_word_by_default` |
 | A `.pages` file reported "Already a PDF" | `test_iwork_uses_the_embedded_preview` |
+| `sips -Z` silently enlarged images smaller than the requested size | `test_images_are_never_enlarged` |
 
 ## Definition of done
 

@@ -265,9 +265,9 @@ class NoNetworkCalls(unittest.TestCase):
     # Everything the app is allowed to import. A new name here should be a
     # deliberate decision, which is the point of pinning the list.
     ALLOWED = {"argparse", "base64", "contextlib", "glob", "http.server", "io",
-               "json", "os", "re", "shutil", "socket", "struct", "subprocess",
-               "sys", "tempfile", "threading", "time", "unittest", "urllib.parse",
-               "webbrowser", "zipfile", "zlib"}
+               "json", "math", "os", "re", "shutil", "socket", "struct",
+               "subprocess", "sys", "tempfile", "threading", "time", "unittest",
+               "urllib.parse", "webbrowser", "zipfile", "zlib"}
 
     @staticmethod
     def imported_modules(path):

@@ -13,6 +13,7 @@ as soon as the conversion returns.
 
 import contextlib
 import glob
+import math
 import os
 import re
 import shutil
@@ -38,6 +39,14 @@ MAX_BYTES = 200 * 1024 * 1024
 # Quick Look renders a page into a box this many pixels tall -- roughly 200dpi
 # for a Letter page, which keeps text readable.
 RENDER_PX = 2400
+
+# Fitting an image to a size budget: quality is lowered first, and only when
+# that isn't enough are the pixel dimensions reduced. Each attempt is a `sips`
+# run, so the search is bounded.
+MIN_QUALITY = 40
+MAX_FIT_ATTEMPTS = 18
+MIN_EDGE_PX = 120
+PDF_OVERHEAD = 1024      # the wrapper a one-page image PDF adds around a JPEG
 WORD_TIMEOUT = 60   # export cap, once Word has proven it is responsive
 WORD_PROBE = 5      # a modal dialog in Word blocks AppleScript entirely
 
@@ -102,6 +111,102 @@ def _to_jpeg(src: str, dst: str, quality: int, max_px: int | None = None) -> boo
     return _sips(args + [src, "--out", dst]) and os.path.exists(dst)
 
 
+def _dimensions(src: str):
+    """(width, height) of an image, or None if sips can't say."""
+    try:
+        proc = subprocess.run(
+            [_tool("sips"), "-g", "pixelWidth", "-g", "pixelHeight", src],
+            capture_output=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    text = proc.stdout.decode("utf-8", "replace")
+    width = re.search(r"pixelWidth:\s*(\d+)", text)
+    height = re.search(r"pixelHeight:\s*(\d+)", text)
+    return (int(width.group(1)), int(height.group(1))) if width and height else None
+
+
+def _fit_jpeg(src: str, tmpdir: str, quality: int,
+              max_px: int | None, target_bytes: int | None):
+    """Encode `src` as JPEG, optionally resized and/or squeezed under a size.
+
+    Returns (jpeg_bytes, note). The note describes anything that was done to
+    the image beyond a plain conversion, so the UI can tell the user.
+    """
+    dst = os.path.join(tmpdir, "fit.jpg")
+    size = _dimensions(src)
+    longest = max(size) if size else None
+
+    # `sips -Z` enlarges images smaller than the limit, which would be a
+    # surprising way to "resize" a photo. Never scale up.
+    if max_px and longest:
+        max_px = min(max_px, longest)
+
+    attempts = []
+
+    def encode(px, q):
+        if not _to_jpeg(src, dst, q, px):
+            raise ConversionError("Not a readable image")
+        with open(dst, "rb") as fh:
+            data = fh.read()
+        attempts.append((len(data), px, q, data))
+        return data
+
+    def describe(data, q):
+        """Say only what actually changed, comparing against the source."""
+        width, height, _ = _jpeg_size(data)
+        parts = []
+        if size and (width, height) != tuple(size):
+            parts.append(f"Resized to {width}\u00d7{height}")
+        if q < quality:
+            parts.append(f"quality {q}" if parts else f"Quality lowered to {q}")
+        return ", ".join(parts) if parts else None
+
+    first = encode(max_px, quality)
+    if not target_bytes or len(first) <= target_bytes:
+        return first, describe(first, quality)
+
+    # Too big. Lower quality at this size, then shrink, and repeat.
+    px = max_px or longest
+    while len(attempts) < MAX_FIT_ATTEMPTS:
+        low, high, best = MIN_QUALITY, quality, None
+        while low <= high and len(attempts) < MAX_FIT_ATTEMPTS:
+            mid = (low + high) // 2
+            data = encode(px, mid)
+            if len(data) <= target_bytes:
+                best = (data, mid)
+                low = mid + 1
+            else:
+                high = mid - 1
+        if best:
+            data, used = best
+            return data, describe(data, used)
+
+        if px is None:                       # dimensions unknown, can't shrink
+            break
+        # A JPEG's size tracks its pixel count, so scale by the square root of
+        # how far over budget the smallest attempt at this size was.
+        floor_size = min(a[0] for a in attempts if a[2] == MIN_QUALITY) or 1
+        scale = math.sqrt(target_bytes / floor_size) * 0.92
+        next_px = max(MIN_EDGE_PX, int(px * min(scale, 0.9)))
+        if next_px >= px or next_px <= MIN_EDGE_PX and px <= MIN_EDGE_PX:
+            break
+        px = next_px
+
+    # Couldn't reach the target: hand back the smallest we managed and say so.
+    smallest = min(attempts, key=lambda a: a[0])
+    width, height, _ = _jpeg_size(smallest[3])
+    return smallest[3], (f"Could not reach the size limit -- smallest is "
+                         f"{_human_size(smallest[0])} at {width}\u00d7{height}")
+
+
+def _human_size(count: int) -> str:
+    """Decimal units, the way Finder shows file sizes on macOS."""
+    if count < 1_000_000:
+        return f"{max(1, round(count / 1000))} KB"
+    return f"{count / 1_000_000:.1f} MB"
+
+
 def _quicklook(src: str, size: int, timeout: int = 30) -> bytes | None:
     """Render a file's first page with Quick Look. Returns PNG bytes.
 
@@ -125,19 +230,17 @@ def _quicklook(src: str, size: int, timeout: int = 30) -> bytes | None:
         shutil.rmtree(outdir, ignore_errors=True)
 
 
-def _render_page1(src: str, tmpdir: str, quality: int, size: int = RENDER_PX) -> bytes:
-    """First page of a document as JPEG bytes."""
+def _render_page1(src: str, tmpdir: str, quality: int, size: int = RENDER_PX,
+                  max_px: int | None = None, target_bytes: int | None = None):
+    """First page of a document as JPEG bytes. Returns (bytes, note)."""
     png = _quicklook(src, size)
     if not png:
         raise ConversionError("Could not render this document")
     png_path = os.path.join(tmpdir, "page1.png")
-    jpg_path = os.path.join(tmpdir, "page1.jpg")
     with open(png_path, "wb") as fh:
         fh.write(png)
-    if not _to_jpeg(png_path, jpg_path, quality):
-        raise ConversionError("Could not render this document")
-    with open(jpg_path, "rb") as fh:
-        return fh.read()
+    # Fit from the lossless render rather than re-encoding a JPEG twice.
+    return _fit_jpeg(png_path, tmpdir, quality, max_px, target_bytes)
 
 
 def _pdf_page_count(data: bytes) -> int | None:
@@ -225,10 +328,25 @@ def _iwork_preview(src: str):
 
 # --- the entry point ------------------------------------------------------
 
-def convert(data: bytes, filename: str, out_format: str, quality: int = 85):
+def _budget_for(out_format: str, target_bytes: int | None):
+    """A PDF wraps the JPEG, so the image itself gets a slightly smaller budget."""
+    if not target_bytes or out_format != "pdf":
+        return target_bytes
+    return max(1024, target_bytes - PDF_OVERHEAD)
+
+
+def _join(*notes):
+    """Combine caveats into one line, dropping the empty ones."""
+    return " \u00b7 ".join(n for n in notes if n) or None
+
+
+def convert(data: bytes, filename: str, out_format: str, quality: int = 85,
+            max_px: int | None = None, target_bytes: int | None = None):
     """Convert an upload. Returns (bytes, extension, note).
 
-    `note` is a short caveat to show the user, or None.
+    `max_px` caps the longest edge of the image; `target_bytes` squeezes the
+    result under a size budget by lowering quality and, if that isn't enough,
+    the dimensions. `note` is a short caveat to show the user, or None.
     """
     if out_format not in OUTPUT_FORMATS:
         raise ConversionError(f"Unsupported output format: {out_format}")
@@ -247,26 +365,28 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85):
         if what == "iwork":
             inner, inner_kind = _iwork_preview(src)
             name = "preview.pdf" if inner_kind == "pdf" else "preview.jpg"
-            payload, ext, inner_note = convert(inner, name, out_format, quality)
+            payload, ext, inner_note = convert(inner, name, out_format, quality,
+                                               max_px, target_bytes)
             note = "From the preview stored in the document"
             if inner_note and inner_note.startswith("First page"):
                 note = f"{inner_note}; from the document's stored preview"
             return payload, ext, note
 
         if what == "image":
-            dst = os.path.join(tmpdir, "out.jpg")
-            if not _to_jpeg(src, dst, quality):
-                raise ConversionError("Not a readable image")
-            with open(dst, "rb") as fh:
-                jpeg = fh.read()
-            return (jpeg_to_pdf(jpeg), ext, None) if out_format == "pdf" else (jpeg, ext, None)
+            budget = _budget_for(out_format, target_bytes)
+            jpeg, note = _fit_jpeg(src, tmpdir, quality, max_px, budget)
+            if out_format == "pdf":
+                return jpeg_to_pdf(jpeg), ext, note
+            return jpeg, ext, note
 
         if what == "pdf":
             if out_format == "pdf":
                 return data, ext, "Already a PDF -- copied unchanged"
             pages = _pdf_page_count(data)
             note = f"First page only ({pages} pages in the PDF)" if pages and pages > 1 else None
-            return _render_page1(src, tmpdir, quality), ext, note
+            jpeg, fit_note = _render_page1(src, tmpdir, quality,
+                                           max_px=max_px, target_bytes=target_bytes)
+            return jpeg, ext, _join(note, fit_note)
 
         # Word: a real export if Word is around, otherwise a rendered page.
         exported = _word_to_pdf(src, tmpdir)
@@ -278,10 +398,15 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85):
             with open(pdf_path, "wb") as fh:
                 fh.write(exported)
             note = f"First page only ({pages} pages in the document)" if pages and pages > 1 else None
-            return _render_page1(pdf_path, tmpdir, quality), ext, note
+            jpeg, fit_note = _render_page1(pdf_path, tmpdir, quality,
+                                           max_px=max_px, target_bytes=target_bytes)
+            return jpeg, ext, _join(note, fit_note)
 
-        jpeg = _render_page1(src, tmpdir, quality)
-        note = "First page only -- open this in Microsoft Word for a full export"
+        budget = _budget_for(out_format, target_bytes)
+        jpeg, fit_note = _render_page1(src, tmpdir, quality,
+                                       max_px=max_px, target_bytes=budget)
+        note = _join("First page only -- open this in Microsoft Word for a full export",
+                     fit_note)
         return (jpeg_to_pdf(jpeg), ext, note) if out_format == "pdf" else (jpeg, ext, note)
 
 

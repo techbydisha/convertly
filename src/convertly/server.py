@@ -213,12 +213,24 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, result, "application/pdf")
 
+    @staticmethod
+    def _positive_int(query, key, limit):
+        """A bounded positive integer from the query string, or None."""
+        raw = query.get(key, [""])[0]
+        try:
+            value = int(raw)
+        except ValueError:
+            return None
+        return value if 0 < value <= limit else None
+
     def do_convert(self, query):
         out_format = (query.get("format", ["jpg"])[0] or "jpg").lower()
         try:
             quality = int(query.get("quality", ["85"])[0])
         except ValueError:
             quality = 85
+        max_px = self._positive_int(query, "max_px", 20000)
+        target_bytes = self._positive_int(query, "target", convert_mod.MAX_BYTES)
 
         if out_format not in OUTPUT_FORMATS:
             self._send(400, b"Unsupported output format")
@@ -232,7 +244,8 @@ class Handler(BaseHTTPRequestHandler):
         stem = os.path.splitext(os.path.basename(name))[0] or "file"
 
         try:
-            result, ext, note = convert(data, name, out_format, quality)
+            result, ext, note = convert(data, name, out_format, quality,
+                                        max_px, target_bytes)
         except ConversionError as exc:
             self._send(422, str(exc).encode("utf-8"))
             return
@@ -283,11 +296,14 @@ def main(argv=None):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
 
-    print(f"\n  Convertly is running at {url}")
-    print("  Images, PDFs, Word and iWork files  ->  jpg, jpeg, pdf")
-    print("  Plus: pull pages out of a PDF, or join PDFs together")
-    print(f"  ({len(INPUT_EXTS)} input types)")
-    print("  Everything stays on this machine. Press Ctrl+C to stop.\n")
+    # flush=True so the address is visible immediately even when the output is
+    # redirected to a file rather than a terminal.
+    print(f"\n  Convertly is running at {url}", flush=True)
+    print("  Images, PDFs, Word and iWork files  ->  jpg, jpeg, pdf", flush=True)
+    print("  Resize pictures or fit them under a size limit", flush=True)
+    print("  Pull pages out of a PDF, or join PDFs together", flush=True)
+    print(f"  ({len(INPUT_EXTS)} input types)", flush=True)
+    print("  Everything stays on this machine. Press Ctrl+C to stop.\n", flush=True)
 
     if not args.no_browser:
         threading.Thread(target=lambda: (time.sleep(0.4), webbrowser.open(url)), daemon=True).start()

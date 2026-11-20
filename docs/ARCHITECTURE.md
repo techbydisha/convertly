@@ -64,6 +64,21 @@ Everything that turns one format into another, built on tools already in macOS:
   probe, because a modal dialog in Word blocks AppleScript indefinitely.
   `--use-word` allows launching it.
 
+**Fitting a size budget.** When a maximum file size is asked for, `_fit_jpeg`
+searches for the best image that fits. A JPEG's size falls off with quality long
+before detail becomes objectionable, so quality is searched first — a binary
+search between the requested quality and a floor of 40. Only if the floor is
+still too large are the pixel dimensions reduced, scaled by the square root of
+how far over budget the attempt was (file size tracks pixel count, so the square
+root is the right first guess). Each attempt is one `sips` run, and the whole
+search is capped at 18 of them; a 12 MP photo typically settles in under two
+seconds.
+
+Two details that are easy to get wrong: `sips -Z` *enlarges* an image smaller
+than the limit, so the requested size is clamped to the source; and a PDF wraps
+its JPEG in about a kilobyte of structure, which has to come out of the budget
+or the finished PDF misses it.
+
 Conversions return `(bytes, extension, note)`. The `note` carries any caveat —
 "First page only (3 pages in the PDF)" — which becomes the amber text on the
 file's row. Nothing is ever silently partial.

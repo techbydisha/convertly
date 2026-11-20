@@ -301,3 +301,52 @@ class ErrorHandling(ServerCase):
         self.assertEqual(status, 200)
         from convertly import pdfedit
         self.assertEqual(pdfedit.page_count(body), 3)
+
+
+@requires_sips
+class SizeOptions(ServerCase):
+    """The resize and size-budget query parameters."""
+
+    def setUp(self):
+        from .helpers import make_noisy_image
+        self.photo = make_noisy_image("heic", 400, 320)
+
+    def test_max_px_resizes(self):
+        status, headers, body = self.post(
+            "/convert?format=jpg&max_px=200", self.photo,
+            headers={"X-Filename": "p.heic"})
+        self.assertEqual(status, 200)
+        self.assertEqual(conv._jpeg_size(body)[0], 200)
+        self.assertIn("200", urllib.parse.unquote(headers["X-Note"]))
+
+    def test_target_squeezes_under_the_budget(self):
+        status, _, body = self.post(
+            "/convert?format=jpg&quality=95&target=30000", self.photo,
+            headers={"X-Filename": "p.heic"})
+        self.assertEqual(status, 200)
+        self.assertLessEqual(len(body), 30000)
+
+    def test_both_options_together(self):
+        status, _, body = self.post(
+            "/convert?format=jpg&max_px=300&target=20000", self.photo,
+            headers={"X-Filename": "p.heic"})
+        self.assertEqual(status, 200)
+        self.assertLessEqual(len(body), 20000)
+        self.assertLessEqual(conv._jpeg_size(body)[0], 300)
+
+    def test_nonsense_values_are_ignored_rather_than_fatal(self):
+        for query in ("max_px=abc", "max_px=-5", "max_px=0", "target=abc",
+                      "target=0", "target=-100", "max_px=999999999",
+                      "target=999999999999"):
+            with self.subTest(query=query):
+                status, _, _ = self.post(f"/convert?format=jpg&{query}", self.photo,
+                                         headers={"X-Filename": "p.heic"})
+                self.assertEqual(status, 200)
+
+    def test_absent_options_leave_the_image_untouched(self):
+        _, _, plain = self.post("/convert?format=jpg", self.photo,
+                                headers={"X-Filename": "p.heic"})
+        _, headers, _ = self.post("/convert?format=jpg", self.photo,
+                                  headers={"X-Filename": "p.heic"})
+        self.assertNotIn("X-Note", headers)
+        self.assertGreater(len(plain), 0)
