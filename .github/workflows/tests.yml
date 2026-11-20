@@ -27,12 +27,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # Deliberately does not use tomllib: that only exists from Python 3.11,
+      # and this project supports 3.10.
       - name: Confirm there are no dependencies to install
-        run: |
-          python3 -c "import tomllib; d = tomllib.load(open('pyproject.toml','rb'));
-          deps = d['project']['dependencies']
-          assert deps == [], f'unexpected dependencies: {deps}'
-          print('no runtime dependencies, as intended')"
+        run: python3 tests/check_no_dependencies.py
 
       - name: Run tests with the coverage floor
         run: python3 tests/coverage_report.py --min 85
