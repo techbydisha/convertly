@@ -12,17 +12,22 @@ there is nothing to install.
 | | [macOS app](#install) | [Browser build](web/) |
 | --- | --- | --- |
 | Where | your Mac | any device, hosted as a static page |
-| Files | never leave the machine | never leave the browser — there is no server |
-| Images, PDFs, Pages/Keynote/Numbers | yes | yes |
+| Files | never leave the machine | never leave the browser — the page cannot open a network connection |
+| Pictures → JPG / JPEG / PDF | yes | yes |
+| Resize, and fit under a size limit | yes | yes |
+| Pages, Keynote, Numbers | yes | yes, to PDF |
+| Editing PDFs | yes | not yet |
+| PDF pages as images | first page | not yet |
+| TIFF | yes | not yet |
 | Word documents | yes | no — `qlmanage` has no browser equivalent |
-| PDF pages as images | first page | every page |
 | Install | nothing | nothing |
 
 Both are in this repository and must behave identically: the same page ranges,
 the same filenames, the same sizes. Those rules are pinned in
 [`shared/spec/`](shared/spec/) and both test suites run against them.
 
-The browser build is a skeleton today — the macOS app below is the one to use.
+The macOS app is the complete one. The browser build does pictures — which is
+most of the daily use — on a phone as well as a Mac.
 
 ---
 
@@ -183,6 +188,9 @@ convertly/
 │   ├── naming.py           what produced files are called
 │   └── web/index.html      the macOS app's interface, one file
 ├── web/                    the browser build, deployed to GitHub Pages
+│   ├── js/                 the conversion code, as ES modules
+│   ├── tests/              its share of the shared spec, run by node --test
+│   └── vendor/             libheif, committed rather than loaded from a CDN
 ├── shared/spec/            behaviour both builds must satisfy
 ├── tests/                  the test suite and a dependency-free coverage report
 └── docs/
@@ -200,9 +208,12 @@ the PDF reading and writing is plain Python.
 ```bash
 python3 tests/coverage_report.py --min 85     # full suite plus the coverage floor
 python3 -m unittest discover -s tests -t .    # just the tests
+node --test web/tests/*.test.mjs              # the browser build
+python3 -m http.server -d web 8000            # run the browser build locally
 ```
 
-Both run on the standard library alone. See [CONTRIBUTING.md](CONTRIBUTING.md)
+The Python side runs on the standard library alone; the browser tests use
+Node's own test runner, with nothing to install. See [CONTRIBUTING.md](CONTRIBUTING.md)
 to get started and [docs/TESTING.md](docs/TESTING.md) for what a good test looks
 like here.
 
@@ -210,6 +221,9 @@ like here.
 
 ## Roadmap
 
+- **Finishing the browser build** — the PDF editor, PDF pages as images, and
+  TIFF. `pdfedit.py` is pure logic with no macOS in it, so it ports directly;
+  the other two need a vendored renderer and decoder.
 - **Resizing to exact dimensions** (e.g. 1080×1080 with cropping) — today the
   longest edge is capped and the aspect ratio always kept.
 - **Rotating or reordering pages within a PDF** — `pdfedit.Builder` already

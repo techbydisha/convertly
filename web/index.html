@@ -3,98 +3,127 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Following a link out should not tell the other site where you came from. -->
+<meta name="referrer" content="no-referrer">
 <!--
   The privacy guarantee, enforced by the browser rather than promised in a README.
 
-  connect-src 'self' allows this page to load its own scripts, styles and the
-  HEIC decoder's WebAssembly, and nothing else. There is no server behind this
-  origin -- GitHub Pages only serves static files -- so there is nowhere for a
-  file to be sent even in principle.
+  connect-src 'none' is the important line: this page cannot open a network
+  connection of any kind. Not to another site, not back to the one it was
+  served from. A bug, a careless change or a malicious dependency cannot send
+  a picture anywhere, because the capability is not there to misuse.
 
-  If the vendored decoder build inlines its WebAssembly rather than fetching it,
-  tighten this to connect-src 'none', which removes the capability entirely.
+  That is possible because the HEIC decoder's WebAssembly is inlined into its
+  own module rather than fetched at runtime -- it costs about half a megabyte
+  more to download, and buys an absolute guarantee instead of a promise.
+
+  There is no 'unsafe-inline' for scripts either: the page's own code lives in
+  js/ and css/, so nothing inline needs to be trusted.
+
+  frame-ancestors is deliberately absent. A browser ignores it in a <meta> tag
+  -- it only counts as an HTTP header -- and GitHub Pages does not let a site
+  set headers, so putting it here would log an error and protect nothing.
+  js/app.js refuses to run inside a frame instead.
 -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
-  style-src 'self' 'unsafe-inline';
+  script-src 'self' 'wasm-unsafe-eval';
+  style-src 'self';
   img-src 'self' blob: data:;
-  connect-src 'self';
+  worker-src 'self';
+  connect-src 'none';
   form-action 'none';
-  frame-ancestors 'none';
   base-uri 'none'">
 <title>Convertly</title>
-<style>
-  :root {
-    --bg: #f6f6f4; --card: #ffffff; --text: #1c1b19; --muted: #6f6d68;
-    --line: #e2e0da; --accent: #c2643a; --accent-soft: #f6ece6; --radius: 14px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #17161a; --card: #201f24; --text: #ecebe8; --muted: #9a978f;
-      --line: #33313a; --accent: #e08757; --accent-soft: #2c2420;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 48px 20px 60px; background: var(--bg); color: var(--text);
-    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
-  .panel {
-    margin-top: 28px; background: var(--card); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 26px;
-  }
-  .panel h2 { font-size: 15px; margin: 0 0 10px; }
-  ul { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 14px; }
-  li { margin-bottom: 5px; }
-  a { color: var(--accent); }
-  code {
-    font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
-    background: var(--accent-soft); padding: 1px 5px; border-radius: 5px;
-  }
-  footer { margin-top: 28px; text-align: center; color: var(--muted); font-size: 12.5px; }
-</style>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 <div class="wrap">
-  <h1>Convertly</h1>
-  <div class="sub">Convert images and documents, and edit PDFs — entirely inside your browser.</div>
+  <header>
+    <h1>Convertly</h1>
+    <div class="sub">Convert pictures to JPG, JPEG or PDF, and fit them under a size limit. Runs entirely in this page — your files never leave the device.</div>
+  </header>
 
-  <div class="panel">
-    <h2>Not built yet</h2>
-    <p style="margin:0;color:var(--muted);font-size:14px">
-      This is the browser build. The structure is in place; the conversion code
-      is being ported. The macOS app is ready to use today — see the
-      <a href="https://github.com/techbydisha/convertly">repository</a>.
-    </p>
+  <div id="drop" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop files">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+    </svg>
+    <div class="big">Drop files here</div>
+    <div class="small">HEIC · PNG · JPEG · GIF · BMP · WebP · PDF · Pages — or click to choose</div>
+  </div>
+  <input type="file" id="picker" class="hidden" multiple>
+
+  <div class="options" id="options">
+    <div class="field">
+    <span class="label">Convert to</span>
+    <div class="segmented" id="formats">
+      <button type="button" data-fmt="jpg" aria-pressed="true">JPG</button>
+      <button type="button" data-fmt="jpeg" aria-pressed="false">JPEG</button>
+      <button type="button" data-fmt="pdf" aria-pressed="false">PDF</button>
+    </div>
+    </div>
+    <div class="quality" id="qualityBox">
+      <span class="label">Quality</span>
+      <input type="range" id="quality" min="40" max="100" step="5" value="85" aria-label="JPEG quality">
+      <output id="qval">85</output>
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>How your files will be handled</h2>
-    <ul>
-      <li>Everything runs in this page. Files are read by JavaScript on your device.</li>
-      <li>There is no server to upload to — this page is static files only.</li>
-      <li>A Content Security Policy blocks any connection off this origin.</li>
-      <li>Once it works offline, you can turn off your network and still convert.</li>
-    </ul>
+  <div class="options second" id="options2">
+    <div class="field">
+    <span class="label">Resize</span>
+    <select class="opt" id="resize" aria-label="Resize the longest edge">
+      <option value="">Original size</option>
+      <option value="4000">Longest edge 4000 px</option>
+      <option value="2500">Longest edge 2500 px</option>
+      <option value="2000">Longest edge 2000 px</option>
+      <option value="1600">Longest edge 1600 px</option>
+      <option value="1200">Longest edge 1200 px</option>
+      <option value="800">Longest edge 800 px</option>
+    </select>
+    </div>
+
+    <div class="field">
+    <span class="label">Max file size</span>
+    <select class="opt" id="target" aria-label="Largest allowed file size">
+      <option value="">No limit</option>
+      <option value="200000">200 KB</option>
+      <option value="500000">500 KB</option>
+      <option value="1000000">1 MB</option>
+      <option value="2000000">2 MB</option>
+      <option value="5000000">5 MB</option>
+      <option value="10000000">10 MB</option>
+      <option value="custom">Custom…</option>
+    </select>
+    <input class="custom hidden" id="targetCustom" type="text"
+           placeholder="750 KB" aria-label="Custom maximum file size">
+    </div>
   </div>
 
-  <div class="panel">
-    <h2>What will work here</h2>
-    <ul>
-      <li>HEIC, PNG, JPEG, GIF, BMP, WebP → JPG, JPEG or PDF</li>
-      <li>Resizing, and fitting a picture under a size limit</li>
-      <li>PDF pages → images, and pulling pages out of or joining PDFs</li>
-      <li>Pages, Keynote and Numbers, via the preview stored inside them</li>
-      <li>Word files stay in the macOS app — <code>qlmanage</code> has no browser equivalent</li>
-    </ul>
+  <div class="listhead hidden" id="listhead">
+    <h2>Your files</h2>
+    <span class="count" id="count"></span>
+  </div>
+  <ul id="list"></ul>
+
+  <div class="actions hidden" id="actions">
+    <button type="button" class="btn primary" id="convert">Convert</button>
+    <button type="button" class="btn hidden" id="downloadAll">Download all</button>
+    <button type="button" class="btn" id="clear">Clear</button>
   </div>
 
-  <footer>No uploads. No accounts. No tracking.</footer>
+  <div class="aside">
+    <p><strong>Not here yet:</strong> editing PDFs, turning a PDF into images,
+    and TIFF files. Word documents will stay in the macOS app — there is no
+    browser equivalent of the tool that renders them.</p>
+    <p>The <a href="https://github.com/techbydisha/convertly" rel="noreferrer">macOS app</a> does
+    all of it, and the same page ranges, filenames and sizes, because both are
+    built against one shared specification.</p>
+  </div>
+
+  <footer>No uploads. No accounts. No tracking. This page cannot open a network connection.</footer>
 </div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>

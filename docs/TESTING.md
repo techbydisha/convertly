@@ -30,6 +30,8 @@ in**. Everything below follows from that.
 | HTTP surface | `tests/test_server.py` | Every route, status codes, headers, malformed requests, CLI parsing |
 | Shared behaviour | `tests/test_shared_spec.py` | The contract both builds satisfy, from `shared/spec/*.json` |
 | Security | `tests/test_security.py` | Network exposure, request origin, hostile filenames and files, no persistence, no secrets |
+| Shared behaviour (browser) | `web/tests/spec.test.mjs` | The same contract, from the browser build's side |
+| PDF writer port | `web/tests/pdfwrite.test.mjs` | Byte-for-byte agreement with the Python image-to-PDF writer |
 | Browser UI | manual — see [Manual checks](#manual-checks) | Drag and drop, tab switching, previews, download behaviour |
 
 ## The shared spec
@@ -55,8 +57,26 @@ bytes rendered as "2 KB" in Python and "3 KB" in JavaScript, because Python's
 uses `floor(x + 0.5)`, and `file-sizes.json` pins the case so it cannot come
 back.
 
+It has now caught a second one. Writing down how a typed size is read exposed
+that `1.2.3 MB` was quietly accepted as 1.2 MB in both front ends, applying a
+limit nobody asked for instead of marking the field wrong. `file-sizes.json`
+has a `typed` section for that, and a third: the macOS app's **Edit PDF** tab
+was showing sizes in 1024-based units while its Convert tab used 1000-based
+ones, so one PDF could read "1.0 MB" in one tab and "1.1 MB" in the next.
+
 **Changing user-visible behaviour starts here**: add the case, watch both sides
 fail, then fix both.
+
+### The ports that cannot be checked by spec alone
+
+Some of the browser build is a line-by-line port rather than a behaviour both
+sides implement independently. For those, "behaves plausibly" is not enough:
+`web/tests/pdfwrite.test.mjs` hands every case to the Python writer as well and
+requires **identical bytes**. A PDF's cross-reference table is a list of offsets
+into the file, and one wrong number produces something some readers open and
+others reject — not a failure any reasonable assertion about shape would catch.
+
+When `pdfedit.py` is ported, do the same with it.
 
 ## Minimum coverage
 
@@ -151,6 +171,17 @@ python3 tests/coverage_report.py --min 85         # with the coverage floor
 SHOW_MISSING=1 python3 tests/coverage_report.py   # list uncovered lines
 ```
 
+The browser build's tests are separate, and need Node rather than Python:
+
+```bash
+node --test web/tests/*.test.mjs                  # the browser build
+python3 -m http.server -d web 8000                # run it locally to try by hand
+```
+
+Node's own test runner, so again nothing to install — but keep `python3` on the
+path, or the byte-for-byte comparison against the Python PDF writer skips
+instead of running.
+
 No dependencies and no installation step: the suite adds `src/` to the import
 path itself. Tests that need macOS tools skip themselves elsewhere, so the suite
 is honest rather than red on other platforms.
@@ -170,6 +201,38 @@ Before a release, run `python3 run.py` and confirm:
 - [ ] **Edit PDF**: page count is right, `2-4` produces exactly those pages, an invalid range blocks the button
 - [ ] Combining two PDFs respects the ▲▼ order
 - [ ] The browser console is free of errors
+
+### The browser build
+
+Serve it with `python3 -m http.server -d web 8000` and confirm:
+
+- [ ] A HEIC converts to JPG, and the thumbnail shows the picture rather than a badge
+- [ ] A Word file, a `.zip` and a `.tiff` each get a row saying *why* they are refused
+- [ ] **Max file size** of 200 KB on a large photo lands under it, and the row says what changed
+- [ ] A picture smaller than the **Resize** setting is left alone, with no note claiming a resize
+- [ ] A `.pages` file converts to PDF, and to JPG is refused with an explanation
+- [ ] Changing the format clears previous results and removes the Download buttons
+- [ ] At phone width every label stays beside the control it names
+- [ ] The console is free of errors, and the network panel shows nothing beyond the page's own files
+
+The last one is the important one. The privacy claim is `connect-src 'none'`,
+and it is worth re-proving rather than assuming:
+
+```js
+navigator.sendBeacon('https://example.com/x', 'data')   // returns true -- but
+```
+
+`sendBeacon` returns `true` even when CSP refuses the request, so a bare return
+value proves nothing. Listen for the violation instead, and check the network
+panel stayed empty:
+
+```js
+document.addEventListener('securitypolicyviolation',
+  e => console.log('blocked', e.violatedDirective, e.blockedURI));
+```
+
+`fetch`, `XMLHttpRequest`, `WebSocket` and `sendBeacon` must all report a
+`connect-src` violation.
 
 ## Verifying PDF work against an independent engine
 
@@ -216,12 +279,16 @@ Each of these was a real defect. The test named beside it is the guard.
 | Word automation hung for 90 seconds behind a modal dialog | `test_word_conversion_never_launches_word_by_default` |
 | A `.pages` file reported "Already a PDF" | `test_iwork_uses_the_embedded_preview` |
 | `sips -Z` silently enlarged images smaller than the requested size | `test_images_are_never_enlarged` |
+| `1.2.3 MB` typed as a size limit was read as 1.2 MB instead of being refused | `a size that cannot be read is refused, not guessed at` |
+| The Edit PDF tab showed 1024-based sizes while the Convert tab used 1000-based | `sizes are shown as the spec says` |
+| `frame-ancestors` in a `<meta>` CSP is ignored by browsers, so it protected nothing | Browser manual check — load the page in an iframe |
 
 ## Definition of done
 
 A change is ready when:
 
 - [ ] `python3 tests/coverage_report.py --min 85` passes
+- [ ] `node --test web/tests/*.test.mjs` passes, if `web/` or `shared/` changed
 - [ ] New behaviour has a test asserting **content**, not just a status code
 - [ ] New failure modes have a test proving they produce a clean error
 - [ ] Anything touching parsing, filenames or the server has a matching row in the security table

@@ -1,0 +1,73 @@
+name: web tests
+
+# The browser build's share of the shared behaviour spec.
+#
+# Separate from tests.yml because it needs a different runtime and no macOS:
+# everything tested here is pure logic -- names, sizes, file kinds, the PDF
+# writer's byte layout -- which is exactly the part that has to agree with the
+# Python build. The canvas and WebAssembly half cannot run without a browser
+# and is checked by hand in one.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'shared/**'
+      - '.github/workflows/web-tests.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - 'shared/**'
+      - '.github/workflows/web-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version still supported, and the current one. Node's own
+        # test runner is used, so there is nothing to install.
+        node: ['20', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # Python is here on purpose: web/tests/pdfwrite.test.mjs hands each case
+      # to the original Python writer and demands identical bytes. Without it
+      # that test skips, and the port stops being checked against anything.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run the tests
+        run: node --test web/tests/*.test.mjs
+
+      - name: The vendored decoder must be the real one, unmodified
+        run: |
+          # A tampered or truncated decoder is the one dependency that could
+          # quietly betray the privacy promise, so its hash is pinned.
+          echo "095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9  web/vendor/libheif/libheif-bundle.mjs" | sha256sum -c -
+
+      - name: Nothing in web/ may reach off-origin
+        run: |
+          # The same check the deploy runs, on every change rather than only at
+          # publish time -- a CDN reference should fail in review, not later.
+          if grep -rnE 'src=["'"'"']https?://' web/ --include='*.html' --include='*.js'; then
+            echo "::error::web/ loads a remote asset; vendor it instead (see web/vendor/README.md)"
+            exit 1
+          fi
+          if grep -rnE '<link[^>]+href=["'"'"']https?://' web/ --include='*.html'; then
+            echo "::error::web/ links a remote stylesheet or resource; vendor it instead"
+            exit 1
+          fi
+          grep -q "connect-src 'none'" web/index.html || {
+            echo "::error::web/index.html no longer sets connect-src 'none'"; exit 1; }
+          echo "ok"

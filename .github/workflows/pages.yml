@@ -37,17 +37,33 @@ jobs:
       - name: Refuse to publish anything that reaches off-origin
         run: |
           # The whole point of this build is that files stay on the device.
-          # A stray CDN link or an absolute http(s) asset would break that, so
-          # fail the deploy rather than ship it.
-          if grep -rnE '(src|href)=["'"'"']https?://' web/ --include='*.html' --include='*.js'; then
-            echo "::error::web/ references a remote asset; vendor it instead (see web/vendor/README.md)"
+          # A stray CDN reference would break that, so fail the deploy rather
+          # than ship it.
+          #
+          # What counts is what the browser *fetches*, not where the reader can
+          # click: src= on any element, and href= on <link>, pull a remote file
+          # in. A plain <a href> is a link the reader chooses to follow, and
+          # the page carries referrer="no-referrer" so following one says
+          # nothing about where they came from.
+          if grep -rnE 'src=["'"'"']https?://' web/ --include='*.html' --include='*.js'; then
+            echo "::error::web/ loads a remote asset; vendor it instead (see web/vendor/README.md)"
+            exit 1
+          fi
+          if grep -rnE '<link[^>]+href=["'"'"']https?://' web/ --include='*.html'; then
+            echo "::error::web/ links a remote stylesheet or resource; vendor it instead"
             exit 1
           fi
           if ! grep -q "Content-Security-Policy" web/index.html; then
             echo "::error::web/index.html has no Content Security Policy"
             exit 1
           fi
-          echo "no remote assets, CSP present"
+          # connect-src 'none' is the guarantee itself, not a nicety: without it
+          # the page merely promises not to upload anything.
+          if ! grep -q "connect-src 'none'" web/index.html; then
+            echo "::error::web/index.html no longer sets connect-src 'none'"
+            exit 1
+          fi
+          echo "no remote assets, CSP present, connect-src 'none' intact"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
