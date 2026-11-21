@@ -224,6 +224,9 @@ like here.
 - **Finishing the browser build** — the PDF editor, PDF pages as images, and
   TIFF. `pdfedit.py` is pure logic with no macOS in it, so it ports directly;
   the other two need a vendored renderer and decoder.
+- **Leaving a file alone when it already fits** — a JPEG is re-encoded even
+  when it is already smaller than the size limit asked for, which can make it
+  slightly *larger*. Both builds do this.
 - **A less cautious fit-to-size search** — when compression alone cannot meet
   a size limit, the dimensions are reduced by a square-root estimate that
   overshoots, so the picture ends up smaller than the budget required. Both
