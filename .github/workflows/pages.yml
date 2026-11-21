@@ -9,6 +9,11 @@ name: deploy web
 # No custom domain. Setting one in Settings -> Pages only works for a domain
 # you own and can add a DNS record to; pointing it at a name someone else owns
 # leaves the site unreachable and unable to get a certificate.
+#
+# If a deploy fails, start a NEW run -- do not use "Re-run failed jobs". A
+# re-run uploads a second artifact called github-pages into the same run, and
+# deploy-pages then refuses with "Multiple artifacts named github-pages were
+# unexpectedly found". The Actions tab's "Run workflow" button is the way out.
 on:
   push:
     branches: [main]
@@ -34,7 +39,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Refuse to publish anything that reaches off-origin
         run: |
@@ -67,9 +72,9 @@ jobs:
           fi
           echo "no remote assets, CSP present, connect-src 'none' intact"
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

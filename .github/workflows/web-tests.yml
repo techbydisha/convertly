@@ -34,16 +34,16 @@ jobs:
         # test runner is used, so there is nothing to install.
         node: ['20', '22', '24']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
 
       # Python is here on purpose: web/tests/pdfwrite.test.mjs hands each case
       # to the original Python writer and demands identical bytes. Without it
       # that test skips, and the port stops being checked against anything.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
