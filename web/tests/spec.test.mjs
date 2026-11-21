@@ -15,7 +15,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { stemOf, convertedName, extractName, splitExt, COMBINED_NAME, FALLBACK_STEM } from '../js/naming.js';
+import { stemOf, convertedName, extractName, removedName, splitExt,
+         COMBINED_NAME, FALLBACK_STEM } from '../js/naming.js';
 import { humanSize, parseSize } from '../js/sizes.js';
 import { kindOf, canHandle, unsupportedReason, OUTPUT_FORMATS, INPUT_EXTS,
          LOSSLESS_FORMATS, isLossless } from '../js/kinds.js';
@@ -41,6 +42,13 @@ test('extracted-page names match the spec', () => {
   for (const c of names.extracted) {
     assert.equal(extractName(c.input, c.spec), c.name,
       `${JSON.stringify(c.input)} with ${JSON.stringify(c.spec)}`);
+  }
+});
+
+test('removed-page names match the spec', () => {
+  for (const c of names.removed) {
+    assert.equal(removedName(c.input, c.spec), c.name,
+      `${JSON.stringify(c.input)} minus ${JSON.stringify(c.spec)}`);
   }
 });
 
@@ -176,9 +184,9 @@ test('a refusal always explains itself', () => {
 
 // --- not ported yet -------------------------------------------------------
 
-// Stated rather than silently absent: shared/spec/page-ranges.json is part of
-// the contract and this build does not satisfy it yet. When the PDF editor is
-// ported, this becomes a real test over ranges.cases.
-test('page ranges are not ported yet', { skip: 'web/ has no PDF editor yet' }, () => {
-  assert.ok(ranges.cases.length);
+// Page ranges are now covered for real, in pdfedit.test.mjs, against the same
+// file. This only guards the link between them.
+test('page ranges are covered by the PDF engine suite', () => {
+  assert.ok(ranges.valid.length > 0 && ranges.invalid.length > 0,
+    'shared/spec/page-ranges.json should hold both accepted and refused cases');
 });

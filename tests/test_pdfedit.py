@@ -172,6 +172,42 @@ class ResourceLimits(unittest.TestCase):
             pass                                   # refusing is fine; hanging is not
 
 
+class RemovingPages(unittest.TestCase):
+    """The inverse of extraction: say what goes, keep the rest."""
+
+    def test_inverts_a_selection(self):
+        self.assertEqual(pdfedit.invert_ranges("2-4", 10), [1, 5, 6, 7, 8, 9, 10])
+        self.assertEqual(pdfedit.invert_ranges("1", 3), [2, 3])
+        self.assertEqual(pdfedit.invert_ranges("1,3", 4), [2, 4])
+
+    def test_blank_removes_nothing(self):
+        """Opposite reason to parse_ranges, same answer: nothing was asked for."""
+        self.assertEqual(pdfedit.invert_ranges("", 3), [1, 2, 3])
+        self.assertEqual(pdfedit.invert_ranges("   ", 3), [1, 2, 3])
+
+    def test_refuses_to_leave_nothing(self):
+        with self.assertRaises(pdfedit.PdfError) as caught:
+            pdfedit.invert_ranges("1-3", 3)
+        self.assertIn("every page", str(caught.exception))
+
+    def test_a_bad_range_is_still_a_bad_range(self):
+        for spec in ("9", "0", "two"):
+            with self.subTest(spec=spec), self.assertRaises(pdfedit.PdfError):
+                pdfedit.invert_ranges(spec, 3)
+
+    def test_build_without_keeps_the_rest_in_order(self):
+        made = pdfedit.build_without([(make_pdf(FIVE), "2-3")])
+        self.assertEqual(page_texts(made), ["Page one", "Page four", "Page five"])
+
+    def test_build_without_handles_a_modern_pdf(self):
+        made = pdfedit.build_without([(make_modern_pdf(("A", "B", "C")), "2")])
+        self.assertEqual(pdfedit.page_count(made), 2)
+
+    def test_removing_nothing_produces_the_whole_document(self):
+        made = pdfedit.build_without([(make_pdf(FIVE), "")])
+        self.assertEqual(page_texts(made), list(FIVE))
+
+
 class Serialisation(unittest.TestCase):
     def test_names_with_specials_are_escaped(self):
         self.assertEqual(pdfedit.serialize(pdfedit.Name("A B")), b"/A#20B")

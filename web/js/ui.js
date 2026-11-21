@@ -7,6 +7,8 @@
 // the macOS app's server calls, with different arguments.
 
 import { convertFile } from './convert.js';
+import { build, buildWithout, pageCount, parseRanges, invertRanges, PdfError } from './pdfedit.js';
+import { removedName, COMBINED_NAME } from './naming.js';
 import { acceptAttribute, unsupportedReason, extOf, kindOf, isLossless } from './kinds.js';
 import { decodeImage } from './decode.js';
 import { encodedSize } from './fit.js';
@@ -43,25 +45,23 @@ const TOOLS = {
     title: 'Merge',
     blurb: 'Join PDFs into one document, in the order you choose.',
     types: 'PDF only',
-    panel: null,
+    panel: 'opt-merge',
     action: 'Merge into one',
-    soon: `Merging PDFs works in the <a href="${REPO}" rel="noreferrer">macOS app</a> today. `
-        + 'The engine behind it is plain Python with nothing Apple-specific in it, so it ports '
-        + 'here directly — that is the next piece of work.',
+    pdf: true,
   },
   edit: {
     title: 'Edit',
-    blurb: 'Keep only the pages you want, or pull a few out into a new PDF.',
+    blurb: 'Remove the pages you do not want, and keep the rest.',
     types: 'PDF only',
-    panel: null,
-    action: 'Extract pages',
-    soon: `Pulling pages out of a PDF works in the <a href="${REPO}" rel="noreferrer">macOS app</a> today. `
-        + 'The rules it follows — what <code>2-4</code> and <code>1,3,5-7</code> select — are '
-        + 'already written down and tested, waiting for this half to be built.',
+    panel: 'opt-edit',
+    action: 'Remove pages',
+    pdf: true,
   },
 };
 
-const PANELS = ['opt-convert', 'opt-compress', 'opt-resize'];
+const PANELS = ['opt-convert', 'opt-compress', 'opt-resize', 'opt-merge', 'opt-edit'];
+
+const isPdfTool = () => Boolean(TOOLS[current].pdf);
 
 let current = 'convert';
 let items = [];
@@ -91,6 +91,8 @@ function showTool(name) {
 
   if (location.hash.slice(1) !== current) history.replaceState(null, '', '#' + current);
 
+  clearResults();
+  items.forEach(checkSpec);
   invalidate();
   scheduleEstimate();
 }
@@ -159,7 +161,63 @@ function settingsFor(file) {
 function ready() {
   if (current === 'compress') return targetBytes() !== null;
   if (current === 'resize') return maxPx() !== null;
-  return TOOLS[current].panel !== null;
+  if (current === 'merge') {
+    const usable = items.filter(i => i.pages !== null && i.status !== 'unsupported');
+    return usable.length >= 2;
+  }
+  if (current === 'edit') {
+    const usable = items.filter(i => i.pages !== null && i.status !== 'unsupported');
+    return usable.length > 0
+      && usable.every(i => !i.specError)
+      && usable.some(i => (i.spec || '').trim());
+  }
+  return true;
+}
+
+/** Why the button is off, when the reason is worth saying out loud. */
+function blockedReason() {
+  if (running || items.length === 0) return null;
+  const usable = items.filter(i => i.pages !== null && i.status !== 'unsupported');
+  if (current === 'merge' && usable.length === 1) return 'Add another PDF to merge with';
+  if (current === 'edit' && usable.length && !usable.some(i => (i.spec || '').trim())) {
+    return 'Type which pages to remove';
+  }
+  if (current === 'compress' && targetBytes() === null) return 'Choose a size limit';
+  if (current === 'resize' && maxPx() === null) return 'Choose a size';
+  return null;
+}
+
+// --- results (Merge makes one file out of many) -------------------------
+
+let results = [];
+
+function clearResults() {
+  results.forEach(r => URL.revokeObjectURL(r.url));
+  results = [];
+  $('results').innerHTML = '';
+  $('resultBox').classList.add('hidden');
+}
+
+function showResult(blob, name) {
+  const url = URL.createObjectURL(blob);
+  results.push({ url, name });
+  const row = document.createElement('li');
+  row.className = 'file';
+  row.innerHTML = `
+    <div class="thumb"><span class="ext">PDF</span></div>
+    <div class="meta"><div class="name"></div><div class="sub"></div></div>
+    <div class="act"></div>`;
+  row.querySelector('.name').textContent = name;
+  row.querySelector('.sub').textContent = humanSize(blob.size);
+  const dl = document.createElement('button');
+  dl.type = 'button'; dl.className = 'dl'; dl.textContent = 'Download';
+  dl.onclick = () => {
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+  };
+  row.querySelector('.act').appendChild(dl);
+  $('results').appendChild(row);
+  $('resultBox').classList.remove('hidden');
 }
 
 // --- adding files ----------------------------------------------------------
@@ -182,7 +240,11 @@ window.addEventListener('drop', e => e.preventDefault());
 
 function add(files) {
   for (const file of files) {
-    const reason = unsupportedReason(file.name);
+    // The PDF tools take PDFs and nothing else; saying so beats a row that
+    // fails later for a reason the user has to guess at.
+    const reason = isPdfTool()
+      ? (kindOf(file.name) === 'pdf' ? null : `${TOOLS[current].title} works on PDFs only`)
+      : unsupportedReason(file.name);
     items.push({
       file,
       // A file this build can't do gets a row saying why, not a silent skip.
@@ -191,6 +253,7 @@ function add(files) {
       row: null,
       thumbUrl: null, resultUrl: null, outName: null, outSize: 0, note: null,
       bitmap: null, estimate: null,
+      pages: null, spec: '', specError: null,
     });
   }
   render();
@@ -223,7 +286,19 @@ async function prepare() {
   preparing = true;
   try {
     for (const item of items) {
-      if (item.status === 'unsupported' || item.thumbUrl) continue;
+      if (item.status === 'unsupported') continue;
+
+      if (kindOf(item.file.name) === 'pdf' && item.pages === null && item.error === null) {
+        try {
+          item.pages = pageCount(new Uint8Array(await item.file.arrayBuffer()));
+        } catch (err) {
+          item.status = 'error';
+          item.error = err instanceof PdfError ? err.message : "Couldn't read this PDF";
+        }
+        render();
+        continue;
+      }
+      if (item.thumbUrl) continue;
       if (kindOf(item.file.name) !== 'image') continue;
 
       let bitmap = null;
@@ -337,6 +412,7 @@ function buildRow(item) {
   row.innerHTML = `
     <div class="thumb"><span class="ext"></span></div>
     <div class="meta"><div class="name"></div><div class="sub"></div></div>
+    <div class="tool"></div>
     <div class="act"></div>
     <button type="button" class="x" title="Remove" aria-label="Remove">&times;</button>`;
   row.querySelector('.ext').textContent = badge(item.file.name);
@@ -349,7 +425,78 @@ function buildRow(item) {
   return row;
 }
 
+function move(item, delta) {
+  const i = items.indexOf(item);
+  const j = i + delta;
+  if (j < 0 || j >= items.length) return;
+  items.splice(j, 0, items.splice(i, 1)[0]);
+  // Re-appending in the new order is what actually reorders the list.
+  const list = $('list');
+  items.forEach(it => it.row && list.appendChild(it.row));
+  clearResults();
+  render();
+}
+
+/** The per-row control a PDF tool needs: order for Merge, pages for Edit. */
+function fillRowTool(item) {
+  const box = item.row.querySelector('.tool');
+  box.innerHTML = '';
+  if (item.status === 'unsupported' || item.error && item.pages === null) return;
+
+  if (current === 'merge' && items.length > 1) {
+    const arrows = document.createElement('div');
+    arrows.className = 'arrows';
+    const i = items.indexOf(item);
+    for (const [label, delta, title, disabled] of [
+      ['\u25B2', -1, 'Move up', i === 0],
+      ['\u25BC', 1, 'Move down', i === items.length - 1],
+    ]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.title = title;
+      b.disabled = disabled || running;
+      b.onclick = () => move(item, delta);
+      arrows.appendChild(b);
+    }
+    box.appendChild(arrows);
+    return;
+  }
+
+  if (current === 'edit') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'field pages-field';
+    input.placeholder = 'e.g. 2-4';
+    input.setAttribute('aria-label', `Pages to remove from ${item.file.name}`);
+    input.value = item.spec;
+    input.disabled = running;
+    input.oninput = () => {
+      item.spec = input.value;
+      checkSpec(item);
+      input.classList.toggle('bad', Boolean(item.specError));
+      clearResults();
+      fillRow(item);
+      renderActions();
+    };
+    box.appendChild(input);
+  }
+}
+
+/** Validate what was typed against this file's real page count, as you type. */
+function checkSpec(item) {
+  item.specError = null;
+  const typed = (item.spec || '').trim();
+  if (!typed || item.pages === null) return;
+  try {
+    invertRanges(typed, item.pages);
+  } catch (err) {
+    item.specError = err instanceof PdfError ? err.message : 'Not a page range';
+  }
+}
+
 function fillRow(item) {
+  fillRowTool(item);
   const sub = item.row.querySelector('.sub');
   const act = item.row.querySelector('.act');
   const name = item.row.querySelector('.name');
@@ -358,6 +505,22 @@ function fillRow(item) {
 
   if (item.status === 'ready') {
     name.textContent = item.file.name;
+    if (isPdfTool()) {
+      if (item.specError) {
+        sub.className = 'sub err';
+        sub.textContent = item.specError;
+      } else {
+        const pages = item.pages === null
+          ? 'reading…'
+          : `${item.pages} page${item.pages > 1 ? 's' : ''}`;
+        const typed = (item.spec || '').trim();
+        const left = current === 'edit' && typed && item.pages !== null
+          ? ` · ${invertRanges(typed, item.pages).length} left`
+          : '';
+        sub.textContent = `${pages} · ${humanSize(item.file.size)}${left}`;
+      }
+      return;
+    }
     sub.textContent = `${badge(item.file.name)} · ${humanSize(item.file.size)}`;
     if (item.estimate) {
       const to = document.createElement('span');
@@ -417,11 +580,22 @@ function render() {
     ? `${items.length} file${items.length > 1 ? 's' : ''}${done ? ` · ${done} done` : ''}`
     : '';
 
-  const go = $('go');
-  go.disabled = running || pending === 0 || !ready();
-  go.textContent = running ? 'Working…' : (pending === 0 && done) ? 'Done' : TOOLS[current].action;
-  $('downloadAll').classList.toggle('hidden', done < 2);
+  renderActions();
   PANELS.forEach(id => $(id).classList.toggle('locked', running));
+}
+
+function renderActions() {
+  const pending = items.filter(i => i.status === 'ready' || i.status === 'error').length;
+  const done = items.filter(i => i.status === 'done').length;
+  const go = $('go');
+  const blocked = blockedReason();
+  go.disabled = running || items.length === 0 || !ready();
+  go.textContent = running
+    ? 'Working…'
+    : blocked ? blocked
+    : (current !== 'merge' && pending === 0 && done) ? 'Done'
+    : TOOLS[current].action;
+  $('downloadAll').classList.toggle('hidden', done < 2);
 }
 
 // --- options ---------------------------------------------------------------
@@ -507,8 +681,11 @@ async function run() {
   if (running || !ready()) return;
   running = true;
   const mine = ++generation;
+  clearResults();
   render();
   try {
+    if (current === 'merge') { await runMerge(); return; }
+    if (current === 'edit') { await runEdit(); return; }
     for (const item of items) {
       if (generation !== mine) return;
       if (item.status !== 'ready' && item.status !== 'error') continue;
@@ -523,6 +700,54 @@ async function run() {
       running = false;
       render();
     }
+  }
+}
+
+/** Every usable PDF, joined in list order, as one file. */
+async function runMerge() {
+  const usable = items.filter(i => i.pages !== null && i.status !== 'unsupported');
+  try {
+    const parts = [];
+    for (const item of usable) {
+      parts.push([new Uint8Array(await item.file.arrayBuffer()), '']);
+    }
+    const merged = build(parts);
+    showResult(new Blob([merged], { type: 'application/pdf' }), COMBINED_NAME);
+    for (const item of usable) {
+      item.status = 'ready';
+      item.note = null;
+    }
+  } catch (err) {
+    const message = err instanceof PdfError ? err.message : 'These PDFs could not be merged';
+    for (const item of usable) { item.status = 'error'; item.error = message; }
+  }
+}
+
+/** Each PDF loses the pages named on its own row, and keeps the rest. */
+async function runEdit() {
+  for (const item of items) {
+    if (item.pages === null || item.status === 'unsupported') continue;
+    const typed = (item.spec || '').trim();
+    if (!typed) continue;                    // nothing asked of this one
+    item.status = 'working';
+    fillRow(item);
+    await new Promise(r => setTimeout(r, 0));
+    try {
+      const data = new Uint8Array(await item.file.arrayBuffer());
+      const made = buildWithout([[data, typed]]);
+      const kept = invertRanges(typed, item.pages);
+      if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      const blob = new Blob([made], { type: 'application/pdf' });
+      item.resultUrl = URL.createObjectURL(blob);
+      item.outName = removedName(item.file.name, typed);
+      item.outSize = blob.size;
+      item.note = `${item.pages - kept.length} removed, ${kept.length} kept`;
+      item.status = 'done';
+    } catch (err) {
+      item.status = 'error';
+      item.error = err instanceof PdfError ? err.message : "Couldn't edit this PDF";
+    }
+    fillRow(item);
   }
 }
 
@@ -566,6 +791,7 @@ $('clear').onclick = () => {
   items = [];
   $('list').innerHTML = '';
   $('qest').classList.add('hidden');
+  clearResults();
   render();
 };
 

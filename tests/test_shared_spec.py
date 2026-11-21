@@ -122,6 +122,11 @@ class FileKinds(unittest.TestCase):
         spec = {f["format"]: f["extension"] for f in load("file-kinds.json")["output_formats"]}
         self.assertEqual(spec, OUTPUT_FORMATS)
 
+    def test_removed_page_names_match(self):
+        for case in load("output-names.json")["removed"]:
+            with self.subTest(input=case["input"], spec=case["spec"]):
+                self.assertEqual(naming.removed_name(case["input"], case["spec"]), case["name"])
+
     def test_lossless_formats_match(self):
         spec = load("file-kinds.json")["lossless_formats"]["formats"]
         self.assertEqual(sorted(spec), sorted(LOSSLESS_FORMATS))

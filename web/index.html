@@ -54,8 +54,8 @@
       <button type="button" data-tool="convert"  aria-current="true">Convert</button>
       <button type="button" data-tool="compress" aria-current="false">Compress</button>
       <button type="button" data-tool="resize"   aria-current="false">Resize</button>
-      <button type="button" data-tool="merge"    aria-current="false">Merge <span class="soon">Soon</span></button>
-      <button type="button" data-tool="edit"     aria-current="false">Edit <span class="soon">Soon</span></button>
+      <button type="button" data-tool="merge"    aria-current="false">Merge</button>
+      <button type="button" data-tool="edit"     aria-current="false">Edit</button>
     </nav>
 
     <div class="promise-wrap">
@@ -148,6 +148,27 @@
     so it stays lossless; anything else comes out as a JPG.</p>
   </section>
 
+  <!-- Merge ------------------------------------------------------------ -->
+  <section class="panel hidden" id="opt-merge">
+    <h2>Order</h2>
+    <p class="note" id="merge-note">Add two or more PDFs. They are joined top to
+    bottom — use the arrows on each row to move one up or down. Pages keep their
+    original quality: nothing is re-compressed on the way through.</p>
+  </section>
+
+  <!-- Edit ------------------------------------------------------------- -->
+  <section class="panel hidden" id="opt-edit">
+    <h2>Pages to remove</h2>
+    <p class="note">Type the pages you want gone on each file's row. Everything
+    else is kept, in its original order.</p>
+    <p class="note">
+      <code>3</code> drops one page &nbsp;·&nbsp;
+      <code>2-4</code> drops three &nbsp;·&nbsp;
+      <code>1,7-9</code> mixes the two &nbsp;·&nbsp;
+      <code>2-</code> drops page 2 to the end
+    </p>
+  </section>
+
   <!-- Not built here yet ----------------------------------------------- -->
   <div class="banner hidden" id="soon-banner">
     <span class="banner-icon" aria-hidden="true">🚧</span>
@@ -165,6 +186,11 @@
       <button type="button" class="cta" id="go">Convert</button>
       <button type="button" class="ghost hidden" id="downloadAll">Download all</button>
       <button type="button" class="ghost" id="clear">Clear</button>
+    </div>
+
+    <div class="files hidden" id="resultBox">
+      <div class="files-head"><h2>Result</h2></div>
+      <ul id="results"></ul>
     </div>
   </div>
 </main>

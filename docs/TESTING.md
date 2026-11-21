@@ -32,6 +32,8 @@ in**. Everything below follows from that.
 | Security | `tests/test_security.py` | Network exposure, request origin, hostile filenames and files, no persistence, no secrets |
 | Shared behaviour (browser) | `web/tests/spec.test.mjs` | The same contract, from the browser build's side |
 | PDF writer port | `web/tests/pdfwrite.test.mjs` | Byte-for-byte agreement with the Python image-to-PDF writer |
+| PDF engine port | `web/tests/pdfedit.test.mjs` | Byte-for-byte agreement on extracting, merging and removing pages |
+| Decompression | `web/tests/inflate.test.mjs` | The synchronous inflate, against Python's `zlib` |
 | Browser UI | manual — see [Manual checks](#manual-checks) | Drag and drop, tab switching, previews, download behaviour |
 
 ## The shared spec
@@ -76,7 +78,17 @@ requires **identical bytes**. A PDF's cross-reference table is a list of offsets
 into the file, and one wrong number produces something some readers open and
 others reject — not a failure any reasonable assertion about shape would catch.
 
-When `pdfedit.py` is ported, do the same with it.
+`pdfedit.py` is now ported the same way, and the same rule caught the same
+class of mistake: a PDF is a graph of numbered objects whose cross-reference
+table is a list of byte offsets, so an object numbered differently or a
+dictionary key in another order produces a file that some readers open and
+others reject. Byte-equality is the only assertion that notices.
+
+One piece of the browser build is new code rather than a port: `inflate.js`,
+because the browser only decompresses asynchronously and the PDF parser is
+synchronous throughout. It is held to the same standard from the other
+direction — Python compresses, JavaScript decompresses, and a thousand random
+round-trips across every level and strategy must come back identical.
 
 ## Minimum coverage
 
@@ -214,6 +226,9 @@ Serve it with `python3 -m http.server -d web 8000` and confirm:
 - [ ] **Resize** set larger than the picture, *together with* a size limit, gives exactly the
       same result as no resize at all — same bytes, same dimensions
 - [ ] A `.pages` file converts to PDF, and to JPG is refused with an explanation
+- [ ] **Merge**: two PDFs join in list order, and the ▲▼ arrows change that order
+- [ ] **Edit**: typing `2-3` on a 5-page PDF leaves pages 1, 4 and 5, named `…-without-2-3.pdf`
+- [ ] **Edit**: a range past the end, or one covering every page, disables the button and says why
 - [ ] Choosing **PNG** dims the quality slider and shows `n/a`, not `auto`
 - [ ] A transparent PNG stays transparent as PNG, and flattens to **white** (not black) as JPG
 - [ ] Changing the format clears previous results and removes the Download buttons

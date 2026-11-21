@@ -49,6 +49,20 @@ export function convertedName(filename, ext) {
 }
 
 /**
+ * The name of a PDF with pages taken out.
+ *
+ * `Report.pdf` minus `2-4` becomes `Report-without-2-4.pdf`. Naming it after
+ * what was removed beats naming it after what is left: "1,5-10" is accurate
+ * and tells you nothing, while "without 2-4" is what you asked for.
+ */
+export function removedName(filename, spec) {
+  const stem = stemOf(filename);
+  const trimmed = String(spec ?? '').trim();
+  if (!trimmed) return `${stem}-copy.pdf`;
+  return `${stem}-without-${trimmed.replace(/[,\s]+/g, '_')}.pdf`;
+}
+
+/**
  * The name of pages pulled out of a PDF.
  *
  * `Annual Report.pdf` with `2-4` becomes `Annual Report-pages-2-4.pdf`;

@@ -30,6 +30,21 @@ def converted_name(filename: str, ext: str) -> str:
     return f"{stem_of(filename)}.{ext}"
 
 
+def removed_name(filename: str, spec: str) -> str:
+    """The name of a PDF with pages taken out.
+
+    `Report.pdf` minus `2-4` becomes `Report-without-2-4.pdf`. Naming it after
+    what was removed beats naming it after what is left: "1,5-10" is accurate
+    and tells you nothing, while "without 2-4" is what you asked for.
+    """
+    stem = stem_of(filename)
+    spec = (spec or "").strip()
+    if not spec:
+        return f"{stem}-copy.pdf"
+    tidy = re.sub(r"[,\s]+", "_", spec)
+    return f"{stem}-without-{tidy}.pdf"
+
+
 def extract_name(filename: str, spec: str) -> str:
     """The name of pages pulled out of a PDF.
 

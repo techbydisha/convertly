@@ -357,6 +357,20 @@ li.file {
 }
 .x:hover { background: var(--err-soft); color: var(--err); }
 
+/* The per-row control a PDF tool needs: order for Merge, pages for Edit. */
+.tool:empty { display: none; }
+.tool { flex: none; }
+.pages-field { width: 112px; text-align: center; font-size: 13px; padding: 7px 9px; }
+
+.arrows { display: flex; flex-direction: column; gap: 3px; }
+.arrows button {
+  appearance: none;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  border-radius: 6px; font-size: 9px; line-height: 1; padding: 3px 7px; cursor: pointer;
+}
+.arrows button:hover:not(:disabled) { background: var(--green-soft); color: var(--green-hover); border-color: var(--green-line); }
+.arrows button:disabled { opacity: .3; cursor: default; }
+
 .actions { display: flex; gap: 11px; align-items: center; margin-top: 24px; flex-wrap: wrap; }
 .actions .cta { font-size: 16px; padding: 14px 32px; }
 
@@ -387,5 +401,6 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
   .drop .cta { width: 100%; }
   .panel { padding: 18px 16px; }
   li.file { gap: 11px; padding: 10px 11px; }
+  .pages-field { width: 84px; }
   .actions .cta { flex: 1; }
 }

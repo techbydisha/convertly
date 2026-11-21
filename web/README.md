@@ -18,8 +18,12 @@ transparency survives — converting the same file to JPG flattens it onto white
 instead. A size limit still applies, but with nothing to trade away the only
 way under it is a smaller picture, which the row reports.
 
-**Not yet:** editing PDFs, turning a PDF into images, and TIFF. Word documents
-are not coming — Quick Look has no browser equivalent.
+**PDFs work.** Merging documents in an order you choose, and removing pages
+from one. The engine is a port of `pdfedit.py`, and its output is checked
+byte-for-byte against the original.
+
+**Not yet:** turning a PDF into images, and TIFF. Word documents are not
+coming — Quick Look has no browser equivalent.
 
 ## How your files stay yours
 
@@ -54,7 +58,8 @@ has been weakened.
 | Images | `sips` | the browser's own decoder, or libheif (WebAssembly) for HEIC |
 | iWork files | the preview inside the document | the same, read with `DecompressionStream` |
 | PDF → image | Quick Look, first page only | not yet — will be pdf.js, **every** page |
-| PDF pages / joining | `pdfedit.py` | not yet — the same logic in JavaScript |
+| PDF pages / joining | `pdfedit.py` | the same engine, ported — byte-identical output |
+| Decompression | `zlib` | `js/inflate.js`, because the browser's is asynchronous |
 | Word documents | Quick Look | **not supported** — no browser equivalent |
 | Reach | one Mac | any device with a browser |
 
@@ -84,6 +89,8 @@ web/
 │   ├── fit.js          resize and the fit-to-size search
 │   ├── pdfwrite.js     a JPEG wrapped in a one-page PDF
 │   ├── unzip.js        just enough ZIP to read an iWork preview
+│   ├── pdfedit.js      reading and rewriting PDFs -- a port of pdfedit.py
+│   ├── inflate.js      synchronous DEFLATE, which the browser does not offer
 │   ├── naming.js       what produced files are called
 │   ├── sizes.js        how sizes are shown and read
 │   └── kinds.js        which files are accepted, and as what
@@ -110,8 +117,11 @@ node --test web/tests/*.test.mjs
 ```
 
 No dependencies — Node's own test runner. `spec.test.mjs` reads the same JSON
-the Python suite does; `pdfwrite.test.mjs` hands every case to the Python
-writer as well and demands byte-identical output, so the port cannot drift.
+the Python suite does. `pdfwrite.test.mjs` and `pdfedit.test.mjs` hand every
+case to the Python implementation as well and demand byte-identical output, so
+neither port can drift. `inflate.test.mjs` checks the decompressor against
+Python's `zlib` across every level and strategy, and a thousand random
+round-trips.
 Install nothing, but do have `python3` on the path or that comparison skips.
 
 Everything tested there is pure logic. The canvas and WebAssembly half needs a

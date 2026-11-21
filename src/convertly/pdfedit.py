@@ -883,6 +883,24 @@ def parse_ranges(spec: str, total: int):
     return out
 
 
+def invert_ranges(spec: str, total: int):
+    """The pages left when `spec` says what to take *out*.
+
+    The inverse of parse_ranges, and deliberately not the same default: an
+    empty selection means "remove nothing" here, where in parse_ranges it
+    means "keep everything". Both come out as the whole document, but for
+    opposite reasons.
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        return list(range(1, total + 1))
+    drop = set(parse_ranges(spec, total))
+    kept = [n for n in range(1, total + 1) if n not in drop]
+    if not kept:
+        raise PdfError("That would remove every page")
+    return kept
+
+
 def page_count(data: bytes) -> int:
     return PDF(data).page_count()
 
@@ -893,4 +911,13 @@ def build(parts) -> bytes:
     for data, spec in parts:
         doc = PDF(data)
         builder.add(doc, parse_ranges(spec, doc.page_count()))
+    return builder.build()
+
+
+def build_without(parts) -> bytes:
+    """Like build(), but each spec says which pages to remove."""
+    builder = Builder()
+    for data, spec in parts:
+        doc = PDF(data)
+        builder.add(doc, invert_ranges(spec, doc.page_count()))
     return builder.build()

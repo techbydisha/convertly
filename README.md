@@ -16,7 +16,7 @@ there is nothing to install.
 | Pictures → JPG / JPEG / PNG / PDF | yes | yes |
 | Resize, and fit under a size limit | yes | yes |
 | Pages, Keynote, Numbers | yes | yes, to PDF |
-| Editing PDFs | yes | not yet |
+| Merge PDFs, remove pages | yes | yes |
 | PDF pages as images | first page | not yet |
 | TIFF | yes | not yet |
 | Word documents | yes | no — `qlmanage` has no browser equivalent |
@@ -231,9 +231,8 @@ like here.
 
 ## Roadmap
 
-- **Finishing the browser build** — the PDF editor, PDF pages as images, and
-  TIFF. `pdfedit.py` is pure logic with no macOS in it, so it ports directly;
-  the other two need a vendored renderer and decoder.
+- **Finishing the browser build** — PDF pages as images, and TIFF. Both need a
+  vendored renderer or decoder; the PDF editing engine is already ported.
 - **Leaving a file alone when it already fits** — a JPEG is re-encoded even
   when it is already smaller than the size limit asked for, which can make it
   slightly *larger*. Both builds do this.
