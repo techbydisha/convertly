@@ -18,5 +18,31 @@
     { "bytes": 1049999, "text": "1.0 MB" },
     { "bytes": 5030000, "text": "5.0 MB" },
     { "bytes": 7700000, "text": "7.7 MB" }
-  ]
+  ],
+  "typed": {
+    "description": "Reading a size the user typed into the 'Max file size' box. A bare number means KB, since that is the unit upload limits are usually quoted in. Anything that cannot be read must be refused, so the field can be marked wrong, rather than guessed at.",
+    "note": "Only the two front ends parse typed sizes; the Python server receives an integer byte count. Both front ends implement this in JavaScript, and the macOS app's copy is inline in src/convertly/web/index.html pending consolidation onto web/js/sizes.js.",
+    "accepted": [
+      { "text": "750 KB",   "bytes": 750000 },
+      { "text": "750kb",    "bytes": 750000,     "why": "spacing and case do not matter" },
+      { "text": "1.5 MB",   "bytes": 1500000 },
+      { "text": "1,500 KB", "bytes": 1500000,    "why": "thousands separators are ignored" },
+      { "text": "900000 B", "bytes": 900000 },
+      { "text": "900000",   "bytes": 900000000,  "why": "a bare number is KB, so this is 900,000 KB" },
+      { "text": "2m",       "bytes": 2000000 },
+      { "text": "1 GB",     "bytes": 1000000000 },
+      { "text": "500",      "bytes": 500000 }
+    ],
+    "refused": [
+      { "text": "",          "why": "nothing typed yet" },
+      { "text": "   " },
+      { "text": "big" },
+      { "text": "0",         "why": "a limit of nothing cannot be met" },
+      { "text": "-5 MB" },
+      { "text": "999 B",     "why": "under 1 KB is never achievable, so it is a mistake" },
+      { "text": "MB",        "why": "a unit with no number" },
+      { "text": "1 TB",      "why": "not a unit this understands; guessing would be worse" },
+      { "text": "1.2.3 MB",  "why": "two decimal points. This used to be read as 1.2 MB, silently applying a limit nobody asked for" }
+    ]
+  }
 }
