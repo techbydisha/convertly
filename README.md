@@ -224,6 +224,10 @@ like here.
 - **Finishing the browser build** — the PDF editor, PDF pages as images, and
   TIFF. `pdfedit.py` is pure logic with no macOS in it, so it ports directly;
   the other two need a vendored renderer and decoder.
+- **A less cautious fit-to-size search** — when compression alone cannot meet
+  a size limit, the dimensions are reduced by a square-root estimate that
+  overshoots, so the picture ends up smaller than the budget required. Both
+  builds share the heuristic, so both would improve together.
 - **Resizing to exact dimensions** (e.g. 1080×1080 with cropping) — today the
   longest edge is capped and the aspect ratio always kept.
 - **Rotating or reordering pages within a PDF** — `pdfedit.Builder` already

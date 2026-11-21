@@ -5,7 +5,7 @@
 // order, the same rows, the same wording. The difference is underneath --
 // where that one posts the file to a local server, this converts it here.
 
-import { convertFile, ConversionError } from './convert.js';
+import { convertFile } from './convert.js';
 import { acceptAttribute, unsupportedReason, extOf, kindOf } from './kinds.js';
 import { decodeImage } from './decode.js';
 import { humanSize, parseSize } from './sizes.js';
@@ -330,9 +330,7 @@ async function convertOne(item, settings) {
     else if (item.thumbUrl) showThumb(item, item.thumbUrl);
   } catch (err) {
     item.status = 'error';
-    item.error = err instanceof ConversionError || err?.message
-      ? err.message
-      : "Couldn't read this file";
+    item.error = err?.message || "Couldn't read this file";
   }
 }
 

@@ -210,6 +210,8 @@ Serve it with `python3 -m http.server -d web 8000` and confirm:
 - [ ] A Word file, a `.zip` and a `.tiff` each get a row saying *why* they are refused
 - [ ] **Max file size** of 200 KB on a large photo lands under it, and the row says what changed
 - [ ] A picture smaller than the **Resize** setting is left alone, with no note claiming a resize
+- [ ] **Resize** set larger than the picture, *together with* a size limit, gives exactly the
+      same result as no resize at all — same bytes, same dimensions
 - [ ] A `.pages` file converts to PDF, and to JPG is refused with an explanation
 - [ ] Changing the format clears previous results and removes the Download buttons
 - [ ] At phone width every label stays beside the control it names
@@ -282,6 +284,7 @@ Each of these was a real defect. The test named beside it is the guard.
 | `1.2.3 MB` typed as a size limit was read as 1.2 MB instead of being refused | `a size that cannot be read is refused, not guessed at` |
 | The Edit PDF tab showed 1024-based sizes while the Convert tab used 1000-based | `sizes are shown as the spec says` |
 | `frame-ancestors` in a `<meta>` CSP is ignored by browsers, so it protected nothing | Browser manual check — load the page in an iframe |
+| A resize limit larger than the picture made the browser's fit-to-size search spend its whole attempt budget shrinking a number that changed nothing | Browser manual check — resize limit above the picture, with a size limit |
 
 ## Definition of done
 

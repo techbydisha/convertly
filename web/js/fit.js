@@ -83,6 +83,14 @@ export async function fitJpeg(bitmap, { quality = 85, maxPx = null, targetBytes 
   const srcW = bitmap.width, srcH = bitmap.height;
   if (!srcW || !srcH) throw new FitError('This image has no size');
 
+  // Resolve the limit against the picture once, up front, the way the Python
+  // side clamps max_px to the source. Without this the shrink loop below would
+  // start from a limit larger than the image -- "longest edge 4000" on a
+  // 480-pixel photo -- and spend its budget of attempts shrinking a number
+  // that changes nothing, then report it could not reach the size limit.
+  const [startW, startH] = drawSize(srcW, srcH, maxPx);
+  const startPx = Math.max(startW, startH);
+
   const attempts = [];
 
   async function encode(px, q) {
@@ -111,11 +119,11 @@ export async function fitJpeg(bitmap, { quality = 85, maxPx = null, targetBytes 
 
   const done = a => ({ blob: a.blob, width: a.width, height: a.height, note: describe(a) });
 
-  const first = await encode(maxPx, quality);
+  const first = await encode(startPx, quality);
   if (!targetBytes || first.size <= targetBytes) return done(first);
 
   // Too big. Lower quality at this size, then shrink, and repeat.
-  let px = maxPx || Math.max(srcW, srcH);
+  let px = startPx;
   while (attempts.length < MAX_FIT_ATTEMPTS) {
     let low = MIN_QUALITY, high = quality, best = null;
     while (low <= high && attempts.length < MAX_FIT_ATTEMPTS) {
@@ -132,6 +140,10 @@ export async function fitJpeg(bitmap, { quality = 85, maxPx = null, targetBytes 
 
     // A JPEG's size tracks its pixel count, so scale by the square root of
     // how far over budget the smallest attempt at this size was.
+    //
+    // This overshoots: it tends to settle on a smaller picture than the budget
+    // actually required. The Python side has the same heuristic and the same
+    // weakness, so leave them in step -- improving it is a change to both.
     const floorSizes = attempts.filter(a => a.q === MIN_QUALITY).map(a => a.size);
     const floorSize = floorSizes.length ? Math.min(...floorSizes) : 1;
     const scale = Math.sqrt(targetBytes / floorSize) * 0.92;
