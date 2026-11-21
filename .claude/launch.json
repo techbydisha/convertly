@@ -4,8 +4,26 @@
     {
       "name": "browser build",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "-d", "web", "8000"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "-d",
+        "web",
+        "8000"
+      ],
       "port": 8000
+    },
+    {
+      "name": "prototype",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "-d",
+        "docs/design",
+        "8010"
+      ],
+      "port": 8010
     }
   ]
 }

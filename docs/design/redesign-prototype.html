@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertly — redesign prototype</title>
+<!--
+  A PROTOTYPE. Nothing here converts anything.
+
+  It exists to settle the layout and the palette before any of it goes near
+  web/. Files you pick are read only for their name and size, so you can see
+  how a real row looks; the action buttons say so rather than pretending.
+
+  The idea being tested: the options buried in today's single screen become
+  the top-level choice. "Get this under 1 MB" is a task someone arrives with,
+  not a dropdown they should have to find.
+-->
+<style>
+  :root {
+    --bg: #f7f4ee;           /* warm paper, not grey */
+    --surface: #ffffff;
+    --surface-sunk: #fbf9f5;
+    --ink: #19181a;
+    --ink-soft: #4a463f;
+    --muted: #726c62;
+    --line: #e7e1d7;
+    --line-strong: #d8d0c2;
+
+    --green: #16874a;
+    --green-hover: #0f6b3a;
+    --green-soft: #e9f3ec;
+    --green-line: #bcdcc7;
+
+    --amber: #9a6b1f;
+    --amber-soft: #f6eedd;
+
+    --radius: 18px;
+    --radius-lg: 24px;
+    --shadow: 0 1px 2px rgba(25, 24, 26, .04), 0 8px 24px rgba(25, 24, 26, .05);
+    --shadow-lift: 0 2px 6px rgba(25, 24, 26, .06), 0 18px 40px rgba(25, 24, 26, .09);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------------------------------------------------------------- header */
+
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(247, 244, 238, .85);
+    backdrop-filter: saturate(1.4) blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .bar {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px;
+    height: 68px;
+    display: flex;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 19px;
+    font-weight: 660;
+    letter-spacing: -.02em;
+    color: var(--ink);
+    text-decoration: none;
+    flex: none;
+  }
+  .mark {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    background: var(--green);
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .mark svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.2; }
+
+  nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+
+  nav button {
+    appearance: none;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 14.5px;
+    font-weight: 520;
+    color: var(--muted);
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: background .15s, color .15s;
+  }
+  nav button:hover { background: rgba(25, 24, 26, .05); color: var(--ink); }
+  nav button[aria-current="true"] { background: var(--green-soft); color: var(--green-hover); font-weight: 600; }
+
+  .soon {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--amber);
+    background: var(--amber-soft);
+    padding: 2px 6px;
+    border-radius: 5px;
+  }
+
+  /* Where the sites we're copying put "Log in / Sign up", we put the reason
+     this exists at all -- in words someone's mum would read the same way. */
+  .promise-wrap { position: relative; flex: none; }
+  .promise {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .promise:hover { border-color: var(--green-line); background: var(--green-soft); }
+  .promise svg { width: 13px; height: 13px; stroke: var(--green); fill: none; stroke-width: 2; flex: none; }
+  .promise b { color: var(--ink-soft); font-weight: 580; white-space: nowrap; }
+  /* The sentence is worth the room when there is room; a narrower window gets
+     the short form rather than a clipped long one. */
+  .promise .said-short { display: none; }
+
+  .promise-pop {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 320px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lift);
+    padding: 18px 20px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    z-index: 30;
+  }
+  .promise-pop strong { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 7px; }
+  .promise-pop p { margin: 0 0 9px; }
+  .promise-pop p:last-child { margin-bottom: 0; }
+  .promise-pop .proof {
+    color: var(--green-hover);
+    background: var(--green-soft);
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-weight: 520;
+  }
+
+  /* ------------------------------------------------------------------ main */
+
+  main { max-width: 760px; margin: 0 auto; padding: 68px 24px 80px; }
+
+  .headline { text-align: center; margin-bottom: 38px; }
+  .headline h1 {
+    margin: 0;
+    font-size: clamp(38px, 6.4vw, 56px);
+    line-height: 1.04;
+    letter-spacing: -.035em;
+    font-weight: 680;
+  }
+  .headline p {
+    margin: 14px auto 0;
+    max-width: 30em;
+    font-size: 17px;
+    color: var(--muted);
+  }
+
+  /* -------------------------------------------------------------- dropzone */
+
+  .drop {
+    background: var(--surface);
+    border: 2px dashed var(--line-strong);
+    border-radius: var(--radius-lg);
+    padding: 52px 28px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: border-color .18s, background .18s, box-shadow .18s, transform .18s;
+  }
+  .drop.over {
+    border-color: var(--green);
+    background: var(--green-soft);
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-2px);
+  }
+  .drop .art { width: 44px; height: 44px; margin: 0 auto 20px; stroke: var(--green); fill: none; stroke-width: 1.7; display: block; }
+
+  .cta {
+    appearance: none;
+    border: 0;
+    background: var(--green);
+    color: #fff;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    padding: 16px 40px;
+    border-radius: 14px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 107, 58, .3), 0 10px 22px -8px rgba(15, 107, 58, .5);
+    transition: background .15s, transform .12s, box-shadow .15s;
+  }
+  .cta:hover { background: var(--green-hover); transform: translateY(-1px); }
+  .cta:active { transform: translateY(0); }
+  .cta:disabled { background: #c6c1b8; box-shadow: none; cursor: default; transform: none; }
+
+  .drop .hint { margin-top: 15px; font-size: 14px; color: var(--muted); }
+  .drop .types { margin-top: 5px; font-size: 12.5px; color: #938d82; letter-spacing: .01em; }
+
+  /* --------------------------------------------------------------- options */
+
+  .panel {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    box-shadow: var(--shadow);
+  }
+  .panel + .panel { margin-top: 14px; }
+  .panel h2 {
+    margin: 0 0 14px;
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+
+  .chip {
+    appearance: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 520;
+    padding: 9px 17px;
+    border-radius: 11px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-sunk);
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .14s, background .14s, color .14s;
+  }
+  .chip:hover { border-color: var(--green-line); background: var(--green-soft); }
+  .chip[aria-pressed="true"] {
+    background: var(--green-soft);
+    border-color: var(--green);
+    color: var(--green-hover);
+    font-weight: 620;
+  }
+
+  .field {
+    font: inherit;
+    font-size: 14px;
+    padding: 9px 13px;
+    border-radius: 11px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-sunk);
+    color: var(--ink);
+    min-width: 0;
+  }
+  .field:focus { outline: none; border-color: var(--green); background: #fff; }
+  .field.wide { flex: 1; }
+
+  .slider { display: flex; align-items: center; gap: 12px; }
+  .slider input { accent-color: var(--green); width: 170px; }
+  .slider output { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); min-width: 32px; }
+  .slider.off { opacity: .42; pointer-events: none; }
+
+  .est {
+    font-size: 13.5px;
+    font-weight: 580;
+    font-variant-numeric: tabular-nums;
+    color: var(--green-hover);
+    background: var(--green-soft);
+    border: 1px solid var(--green-line);
+    padding: 6px 12px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .est.working { color: var(--muted); background: var(--surface-sunk); border-color: var(--line); font-weight: 500; }
+  .sub .est-inline { color: var(--green-hover); font-weight: 580; }
+  .sub .to { opacity: .55; padding: 0 5px; }
+
+  .note { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); }
+  .note code { background: var(--surface-sunk); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
+
+  .banner {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--amber-soft);
+    border: 1px solid #ead9b8;
+    border-radius: var(--radius);
+    padding: 15px 18px;
+    margin-top: 22px;
+    font-size: 14px;
+    color: #6f5115;
+  }
+  .banner b { color: #533c0c; }
+
+  /* ----------------------------------------------------------------- files */
+
+  .files { margin-top: 22px; }
+  .files-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 10px; }
+  .files-head h2 { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .files-head span { font-size: 13px; color: var(--muted); }
+
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.file {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 9px;
+    box-shadow: var(--shadow);
+  }
+  .thumb {
+    width: 44px; height: 44px; flex: none;
+    border-radius: 10px;
+    background: var(--surface-sunk);
+    border: 1px solid var(--line);
+    display: grid; place-items: center;
+    font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em;
+    overflow: hidden;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .meta { flex: 1; min-width: 0; }
+  .meta .name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .meta .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .ghost {
+    appearance: none; border: 1px solid var(--line-strong); background: var(--surface);
+    font: inherit; font-size: 13px; color: var(--ink-soft);
+    padding: 7px 13px; border-radius: 10px; cursor: pointer;
+  }
+  .ghost:hover { background: var(--surface-sunk); }
+  .x { appearance: none; border: 0; background: none; color: var(--muted); font-size: 19px; line-height: 1; padding: 5px 7px; border-radius: 8px; cursor: pointer; }
+  .x:hover { background: #f7e9e6; color: #b4392f; }
+  .arrows { display: flex; flex-direction: column; gap: 3px; }
+  .arrows button { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 6px; font-size: 9px; line-height: 1; padding: 3px 6px; cursor: pointer; }
+  .arrows button:hover { background: var(--green-soft); color: var(--green-hover); }
+
+  .actions { display: flex; gap: 11px; align-items: center; margin-top: 24px; }
+  .actions .cta { font-size: 16px; padding: 14px 32px; }
+
+  /* ---------------------------------------------------------------- footer */
+
+  footer {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
+
+  .proto-tag {
+    position: fixed; bottom: 16px; right: 16px; z-index: 30;
+    background: var(--ink); color: #fff;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .04em;
+    padding: 8px 14px; border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 1080px) {
+    .promise .said-full { display: none; }
+    .promise .said-short { display: inline; }
+  }
+
+  @media (max-width: 860px) {
+    /* No room for both; the nav wins and the footer still says it. */
+    .promise-wrap { display: none; }
+  }
+
+  @media (max-width: 760px) {
+    .bar { gap: 14px; padding: 0 16px; height: 62px; }
+    main { padding: 44px 16px 60px; }
+    .drop { padding: 38px 18px; }
+    .cta { width: 100%; }
+    .actions .cta { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <a class="brand" href="#convert">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9h12M12 5l4 4-4 4"/><path d="M20 15H8M12 19l-4-4 4-4"/>
+        </svg>
+      </span>
+      Convertly
+    </a>
+
+    <nav id="nav" aria-label="Tools">
+      <button data-tool="convert"  aria-current="true">Convert</button>
+      <button data-tool="compress" aria-current="false">Compress</button>
+      <button data-tool="resize"   aria-current="false">Resize</button>
+      <button data-tool="merge"    aria-current="false">Merge</button>
+      <button data-tool="edit"     aria-current="false">Edit <span class="soon">Soon</span></button>
+    </nav>
+
+    <div class="promise-wrap">
+      <button class="promise" id="promise" aria-expanded="false">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+        </svg>
+        <b class="said-full">Your files never leave this device</b>
+        <b class="said-short">Stays on your device</b>
+      </button>
+      <div class="promise-pop" id="promisePop" hidden>
+        <strong>Your files stay with you.</strong>
+        <p>Convertly does the work inside your browser, on your own computer.
+        Your photos and documents are never sent over the internet — not to us,
+        not to anyone — so there is no copy anywhere for someone else to open.</p>
+        <p class="proof">Turn your Wi‑Fi off and it still works. That is the whole proof.</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="headline">
+    <h1 id="title">Convert</h1>
+    <p id="blurb">Turn photos and documents into JPG, PNG or PDF. Everything happens on your device.</p>
+  </div>
+
+  <div class="drop" id="drop">
+    <svg class="art" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/>
+      <path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>
+    </svg>
+    <button class="cta" id="choose">Choose files</button>
+    <div class="hint">or drop them here</div>
+    <div class="types" id="types">HEIC · PNG · JPEG · GIF · BMP · WebP · PDF · Pages</div>
+  </div>
+  <input type="file" id="picker" class="hidden" multiple>
+
+  <!-- Tool-specific options ------------------------------------------- -->
+
+  <section class="panel" id="opt-convert">
+    <h2>Convert to</h2>
+    <div class="row" id="formats">
+      <button class="chip" aria-pressed="true">JPG</button>
+      <button class="chip" aria-pressed="false">JPEG</button>
+      <button class="chip" aria-pressed="false">PNG</button>
+      <button class="chip" aria-pressed="false">PDF</button>
+    </div>
+    <p class="note" id="fmt-note">JPG is right for photographs. PNG keeps every pixel — better for screenshots, logos and anything with transparency, but larger.</p>
+    <div class="row" style="margin-top:18px">
+      <div class="slider" id="qbox">
+        <span style="font-size:14px;color:var(--muted)">Quality</span>
+        <input type="range" min="40" max="100" step="5" value="85" id="quality">
+        <output id="qval">85</output>
+      </div>
+      <!-- The real size at this setting, measured by actually encoding the
+           picture -- not a guess. Appears once there is a file to measure. -->
+      <span class="est hidden" id="qest"></span>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="opt-compress">
+    <h2>Keep it under</h2>
+    <div class="row" id="targets">
+      <button class="chip" aria-pressed="false">200 KB</button>
+      <button class="chip" aria-pressed="true">1 MB</button>
+      <button class="chip" aria-pressed="false">2 MB</button>
+      <button class="chip" aria-pressed="false">5 MB</button>
+      <input class="field" style="width:120px" placeholder="750 KB" aria-label="Custom size">
+    </div>
+    <p class="note">Compression is tried first, so the picture keeps its size. Dimensions are only reduced if that isn't enough — and the result tells you which happened.</p>
+  </section>
+
+  <section class="panel hidden" id="opt-resize">
+    <h2>Longest edge</h2>
+    <div class="row" id="edges">
+      <button class="chip" aria-pressed="false">4000 px</button>
+      <button class="chip" aria-pressed="false">2500 px</button>
+      <button class="chip" aria-pressed="true">1600 px</button>
+      <button class="chip" aria-pressed="false">1200 px</button>
+      <button class="chip" aria-pressed="false">800 px</button>
+      <input class="field" style="width:110px" placeholder="1080 px" aria-label="Custom edge">
+    </div>
+    <p class="note">The aspect ratio is always kept, and a picture is never enlarged — ask for more than it has and it is left alone.</p>
+  </section>
+
+  <section class="panel hidden" id="opt-merge">
+    <h2>Order</h2>
+    <p class="note" style="margin-top:0">Add two or more PDFs. They are joined top to bottom — use the arrows on each row to reorder.</p>
+  </section>
+
+  <section class="panel hidden" id="opt-edit">
+    <h2>Pages to keep</h2>
+    <div class="row">
+      <input class="field wide" placeholder="leave blank for all, or 2-4" aria-label="Pages to keep">
+    </div>
+    <p class="note">
+      <code>2-4</code> keeps three pages &nbsp;·&nbsp; <code>1,3,5-7</code> picks a few &nbsp;·&nbsp;
+      <code>2-</code> runs to the end &nbsp;·&nbsp; <code>3-1</code> reverses them
+    </p>
+  </section>
+
+  <div class="banner hidden" id="edit-banner">
+    <span style="font-size:17px;line-height:1">🚧</span>
+    <div><b>Edit is the next feature.</b> The page-selection engine already exists in the macOS app — this is the browser half, and the rules it follows are written down and tested before a line of it ships.</div>
+  </div>
+
+  <!-- Files ------------------------------------------------------------ -->
+
+  <div class="files hidden" id="files">
+    <div class="files-head">
+      <h2>Your files</h2>
+      <span id="count"></span>
+    </div>
+    <ul id="list"></ul>
+    <div class="actions">
+      <button class="cta" id="go">Convert</button>
+      <button class="ghost" id="clear">Clear</button>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="rule"></div>
+  Your files never leave this device. No accounts, no tracking, nothing stored — and it works with the Wi‑Fi off.
+</footer>
+
+<div class="proto-tag">PROTOTYPE · nothing converts</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  const TOOLS = {
+    convert: {
+      title: 'Convert',
+      blurb: 'Turn photos and documents into JPG, PNG or PDF. Everything happens on your device.',
+      types: 'HEIC · PNG · JPEG · GIF · BMP · WebP · PDF · Pages',
+      panel: 'opt-convert',
+      action: 'Convert',
+    },
+    compress: {
+      title: 'Compress',
+      blurb: 'Get a picture under a size limit — for the upload that only allows 1 MB.',
+      types: 'HEIC · PNG · JPEG · GIF · BMP · WebP',
+      panel: 'opt-compress',
+      action: 'Compress',
+    },
+    resize: {
+      title: 'Resize',
+      blurb: 'Cap the longest edge, keeping the shape of the picture exactly as it was.',
+      types: 'HEIC · PNG · JPEG · GIF · BMP · WebP',
+      panel: 'opt-resize',
+      action: 'Resize',
+    },
+    merge: {
+      title: 'Merge',
+      blurb: 'Join PDFs into one document, in the order you choose.',
+      types: 'PDF only',
+      panel: 'opt-merge',
+      action: 'Merge into one',
+    },
+    edit: {
+      title: 'Edit',
+      blurb: 'Keep only the pages you want, or pull a few out into a new PDF.',
+      types: 'PDF only',
+      panel: 'opt-edit',
+      action: 'Extract pages',
+      soon: true,
+    },
+  };
+
+  const PANELS = Object.values(TOOLS).map(t => t.panel);
+  let current = 'convert';
+  let files = [];
+
+  // --- switching tools ---------------------------------------------------
+
+  function show(name) {
+    const tool = TOOLS[name] || TOOLS.convert;
+    current = name in TOOLS ? name : 'convert';
+
+    $('title').textContent = tool.title;
+    $('blurb').textContent = tool.blurb;
+    $('types').textContent = tool.types;
+    $('go').textContent = tool.action;
+
+    PANELS.forEach(id => $(id).classList.toggle('hidden', id !== tool.panel));
+    $('edit-banner').classList.toggle('hidden', !tool.soon);
+
+    [...$('nav').children].forEach(b =>
+      b.setAttribute('aria-current', String(b.dataset.tool === current)));
+
+    // Merge shows reorder arrows; the others don't.
+    render();
+    scheduleEstimate();
+    if (location.hash.slice(1) !== current) history.replaceState(null, '', '#' + current);
+  }
+
+  $('nav').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (btn) show(btn.dataset.tool);
+  });
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+  // --- picking files (names and sizes only) ------------------------------
+
+  const picker = $('picker'), drop = $('drop');
+  $('choose').onclick = () => picker.click();
+  picker.onchange = () => { add([...picker.files]); picker.value = ''; };
+
+  ['dragenter', 'dragover'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => e.preventDefault());
+
+  function add(picked) {
+    picked.forEach(f => files.push({ file: f, url: null, bitmap: null, estimate: null }));
+    files.forEach(item => {
+      if (!item.url && /^image\//.test(item.file.type)) {
+        item.url = URL.createObjectURL(item.file);   // preview only
+      }
+    });
+    render();
+    // Decode once; every later estimate re-encodes from this, not from disk.
+    Promise.all(files.map(async item => {
+      if (item.bitmap || !/^image\//.test(item.file.type)) return;
+      try { item.bitmap = await createImageBitmap(item.file); } catch { /* not an image we can read */ }
+    })).then(scheduleEstimate);
+  }
+
+  // --- what will this actually come out as? ------------------------------
+  //
+  // Not a guess: the picture is encoded at the chosen setting and the result
+  // measured. That is cheap enough to do live -- a 12-megapixel JPEG encodes
+  // in about 11ms -- so the number beside the slider is the real one.
+
+  let estimateRun = 0;
+  let estimateTimer = null;
+
+  function chosenFormat() {
+    const on = document.querySelector('#formats .chip[aria-pressed="true"]');
+    return on ? on.textContent.trim() : 'JPG';
+  }
+
+  async function encodedSize(bitmap, format, quality) {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const alpha = format === 'PNG';
+    const ctx = canvas.getContext('2d', { alpha });
+    if (!ctx) return null;
+    if (!alpha) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    ctx.drawImage(bitmap, 0, 0);
+    const type = alpha ? 'image/png' : 'image/jpeg';
+    const blob = await new Promise(r => canvas.toBlob(r, type, quality / 100));
+    canvas.width = canvas.height = 0;
+    if (!blob) return null;
+    // A one-page PDF is the JPEG plus about a kilobyte of wrapper.
+    return format === 'PDF' ? blob.size + 1024 : blob.size;
+  }
+
+  function scheduleEstimate() {
+    clearTimeout(estimateTimer);
+    const measurable = files.filter(f => f.bitmap);
+    const box = $('qest');
+    if (current !== 'convert' || measurable.length === 0) {
+      box.classList.add('hidden');
+      return;
+    }
+    box.classList.remove('hidden');
+    box.classList.add('working');
+    box.textContent = 'measuring…';
+    // Debounced, so dragging the slider does not queue an encode per pixel.
+    estimateTimer = setTimeout(runEstimate, 140);
+  }
+
+  async function runEstimate() {
+    const mine = ++estimateRun;
+    const format = chosenFormat();
+    const quality = Number($('quality').value);
+    for (const item of files) {
+      if (!item.bitmap) continue;
+      const bytes = await encodedSize(item.bitmap, format, quality);
+      if (mine !== estimateRun) return;        // a newer run has started
+      item.estimate = bytes;
+    }
+    if (mine !== estimateRun) return;
+    const total = files.reduce((n, f) => n + (f.estimate || 0), 0);
+    const box = $('qest');
+    box.classList.remove('working');
+    const many = files.filter(f => f.estimate).length > 1;
+    box.textContent = (many ? 'about ' : '') + size(total) + (many ? ' in total' : '');
+    render();
+  }
+
+  // Decimal units, the way the real app shows them.
+  const size = b => b < 1e6
+    ? Math.max(1, Math.floor(b / 1000 + 0.5)) + ' KB'
+    : (b / 1e6).toFixed(1) + ' MB';
+  const ext = n => (n.split('.').pop() || 'file').toUpperCase().slice(0, 5);
+
+  function render() {
+    $('files').classList.toggle('hidden', files.length === 0);
+    $('count').textContent = files.length
+      ? files.length + ' file' + (files.length > 1 ? 's' : '') : '';
+
+    const list = $('list');
+    list.innerHTML = '';
+    files.forEach((item, i) => {
+      const li = document.createElement('li');
+      li.className = 'file';
+
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      if (item.url) {
+        const img = document.createElement('img');
+        img.src = item.url; img.alt = '';
+        thumb.appendChild(img);
+      } else {
+        thumb.textContent = ext(item.file.name);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = item.file.name;
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = ext(item.file.name) + ' · ' + size(item.file.size);
+      if (current === 'convert' && item.estimate) {
+        const to = document.createElement('span');
+        to.className = 'to'; to.textContent = '→';
+        const est = document.createElement('span');
+        est.className = 'est-inline'; est.textContent = size(item.estimate);
+        sub.append(to, est);
+      }
+      meta.append(name, sub);
+
+      li.append(thumb, meta);
+
+      if (current === 'merge' && files.length > 1) {
+        const arrows = document.createElement('div');
+        arrows.className = 'arrows';
+        const up = document.createElement('button');
+        up.textContent = '▲'; up.title = 'Move up'; up.disabled = i === 0;
+        up.onclick = () => { files.splice(i - 1, 0, files.splice(i, 1)[0]); render(); };
+        const down = document.createElement('button');
+        down.textContent = '▼'; down.title = 'Move down'; down.disabled = i === files.length - 1;
+        down.onclick = () => { files.splice(i + 1, 0, files.splice(i, 1)[0]); render(); };
+        arrows.append(up, down);
+        li.append(arrows);
+      }
+
+      const x = document.createElement('button');
+      x.className = 'x';
+      x.innerHTML = '&times;';
+      x.title = 'Remove';
+      x.onclick = () => {
+        if (item.url) URL.revokeObjectURL(item.url);
+        item.bitmap?.close?.();
+        files.splice(i, 1);
+        render();
+        scheduleEstimate();
+      };
+      li.append(x);
+      list.appendChild(li);
+    });
+  }
+
+  $('clear').onclick = () => {
+    files.forEach(i => {
+      if (i.url) URL.revokeObjectURL(i.url);
+      i.bitmap?.close?.();
+    });
+    files = [];
+    estimateRun++;
+    $('qest').classList.add('hidden');
+    render();
+  };
+
+  $('go').onclick = () => {
+    const was = $('go').textContent;
+    $('go').textContent = 'Prototype — not wired up';
+    $('go').disabled = true;
+    setTimeout(() => { $('go').textContent = was; $('go').disabled = false; }, 1600);
+  };
+
+  // --- small option behaviours -------------------------------------------
+
+  function chips(id, onPick) {
+    $(id).addEventListener('click', e => {
+      const btn = e.target.closest('.chip');
+      if (!btn) return;
+      [...$(id).querySelectorAll('.chip')].forEach(b =>
+        b.setAttribute('aria-pressed', String(b === btn)));
+      if (onPick) onPick(btn.textContent.trim());
+    });
+  }
+
+  chips('formats', label => {
+    scheduleEstimate();
+    // PNG keeps every pixel, so there is nothing to set.
+    const lossless = label === 'PNG';
+    $('qbox').classList.toggle('off', lossless);
+    $('qval').value = lossless ? 'n/a' : $('quality').value;
+    $('fmt-note').textContent = lossless
+      ? 'PNG keeps every pixel. Best for screenshots, logos and anything with transparency — expect photographs to come out larger than the JPEG they came from.'
+      : label === 'PDF'
+        ? 'The picture is placed on a page at its original quality, never re-compressed twice.'
+        : 'JPG is right for photographs. PNG keeps every pixel — better for screenshots, logos and anything with transparency, but larger.';
+  });
+  chips('targets');
+  chips('edges');
+
+  $('quality').addEventListener('input', () => {
+    if ($('qval').value !== 'n/a') $('qval').value = $('quality').value;
+    scheduleEstimate();
+  });
+
+  // --- the privacy badge explains itself on demand -----------------------
+
+  const promise = $('promise'), pop = $('promisePop');
+  function setPop(open) {
+    pop.hidden = !open;
+    promise.setAttribute('aria-expanded', String(open));
+  }
+  promise.addEventListener('click', e => { e.stopPropagation(); setPop(pop.hidden); });
+  promise.addEventListener('mouseenter', () => setPop(true));
+  $('promisePop').addEventListener('mouseleave', () => setPop(false));
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.promise-wrap')) setPop(false);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setPop(false); });
+
+  show(location.hash.slice(1) || 'convert');
+})();
+</script>
+</body>
+</html>
