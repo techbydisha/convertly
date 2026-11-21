@@ -1,5 +1,8 @@
 # Convertly in the browser
 
+Live at **<https://techbydisha.github.io/convertly/>**, published from this
+directory by [`pages.yml`](../.github/workflows/pages.yml) on every change.
+
 The hosted build. Same product as the macOS app, running entirely inside the
 page: files are read by JavaScript on the device and never sent anywhere,
 because there is no server behind it — GitHub Pages serves static files only.

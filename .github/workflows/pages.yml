@@ -1,19 +1,21 @@
 name: deploy web
 
-# Manual only for now. The browser build is a skeleton, and GitHub Pages has to
-# be switched on first: Settings -> Pages -> Source -> GitHub Actions. Once it
-# is on and there is something worth publishing, uncomment the push trigger.
+# Publishes https://techbydisha.github.io/convertly/ on every change to web/.
 #
-# Note the site is served from web/, not /docs -- /docs holds this project's
+# The site is served from web/, not /docs -- /docs holds this project's
 # documentation, and "deploy from a branch" only offers the repository root or
 # /docs. Deploying through Actions is what allows any directory.
+#
+# No custom domain. Setting one in Settings -> Pages only works for a domain
+# you own and can add a DNS record to; pointing it at a name someone else owns
+# leaves the site unreachable and unable to get a certificate.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - 'web/**'
-  #     - '.github/workflows/pages.yml'
 
 permissions:
   contents: read

@@ -9,9 +9,9 @@ there is nothing to install.
 
 ## Two ways to run it
 
-| | [macOS app](#install) | [Browser build](web/) |
+| | [macOS app](#install) | [Browser build](https://techbydisha.github.io/convertly/) |
 | --- | --- | --- |
-| Where | your Mac | any device, hosted as a static page |
+| Where | your Mac | any device, in the browser |
 | Files | never leave the machine | never leave the browser — the page cannot open a network connection |
 | Pictures → JPG / JPEG / PDF | yes | yes |
 | Resize, and fit under a size limit | yes | yes |
@@ -27,7 +27,9 @@ the same filenames, the same sizes. Those rules are pinned in
 [`shared/spec/`](shared/spec/) and both test suites run against them.
 
 The macOS app is the complete one. The browser build does pictures — which is
-most of the daily use — on a phone as well as a Mac.
+most of the daily use — on a phone as well as a Mac, and needs nothing
+installed: **<https://techbydisha.github.io/convertly/>**. Its source is in
+[`web/`](web/).
 
 ---
 
