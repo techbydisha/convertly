@@ -51,6 +51,13 @@ Three other things follow from the same idea:
 The deploy workflow re-checks all of this and refuses to publish if any of it
 has been weakened.
 
+## The same interface, twice
+
+`src/convertly/web/index.html` is this page with its stylesheet inlined and a
+different script: same markup, same wording, same five tools. The macOS copy
+posts each job to its local server, which has `sips`, Quick Look and Word to
+call on; this one does the work in the page. Change one and change the other.
+
 ## How it differs from the macOS app
 
 | | macOS app | Browser build |

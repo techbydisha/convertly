@@ -13,6 +13,7 @@ from .helpers import (
     LocalServer,
     make_image,
     make_pdf,
+    page_texts,
     requires_quicklook,
     requires_sips,
     temp_dir_count,
@@ -184,6 +185,30 @@ class PdfBuildEndpoint(ServerCase):
         self.assertEqual(status, 200)
         from convertly import pdfedit
         self.assertEqual(pdfedit.page_count(body), 5)
+
+    def test_removes_pages_when_asked(self):
+        """mode=remove reads the range as what to take out, not what to keep."""
+        status, _, body = self.post(
+            "/pdf/build?mode=remove", framed(self.five),
+            headers={"X-Ranges": urllib.parse.quote(json.dumps(["2-4"]))})
+        self.assertEqual(status, 200)
+        self.assertEqual(page_texts(body), ["One", "Five"])
+
+    def test_keeps_pages_by_default(self):
+        """The same range, the other way round -- the default must not drift."""
+        status, _, body = self.build([self.five], ["2-4"])
+        self.assertEqual(status, 200)
+        self.assertEqual(page_texts(body), ["Two", "Three", "Four"])
+
+    def test_removing_every_page_is_refused(self):
+        status, _, body = self.post(
+            "/pdf/build?mode=remove", framed(self.five),
+            headers={"X-Ranges": urllib.parse.quote(json.dumps(["1-5"]))})
+        self.assertEqual(status, 422)
+        self.assertIn(b"every page", body)
+
+    def test_unknown_mode_is_rejected(self):
+        self.assertEqual(self.post("/pdf/build?mode=sideways", framed(self.five))[0], 400)
 
     def test_malformed_framing_is_rejected(self):
         body = struct.pack(">I", 999999) + b"short"

@@ -4,480 +4,666 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Convertly</title>
+<!--
+  The macOS app's interface.
+
+  Deliberately the same page as the browser build in web/ -- same markup, same
+  stylesheet, same wording -- so the two do not become different products. The
+  difference is underneath: this one posts each file to the local server, which
+  converts it with sips, Quick Look and pdfedit.py, where the browser build
+  does the work in the page.
+
+  The stylesheet is inlined rather than linked because this file is served on
+  its own by server.py and ships inside the Python package. It is a copy of
+  web/css/app.css; change them together.
+-->
 <style>
-  :root {
-    --bg: #f6f6f4;
-    --card: #ffffff;
-    --text: #1c1b19;
-    --muted: #6f6d68;
-    --line: #e2e0da;
-    --accent: #c2643a;
-    --accent-soft: #f6ece6;
-    --ok: #2f7d55;
-    --warn: #8a6410;
-    --err: #b4392f;
-    --thumb-bg: #f0efec;
-    --radius: 14px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #17161a;
-      --card: #201f24;
-      --text: #ecebe8;
-      --muted: #9a978f;
-      --line: #33313a;
-      --accent: #e08757;
-      --accent-soft: #2c2420;
-      --ok: #6cc08c;
-      --warn: #d9ad5c;
-      --err: #e8796d;
-      --thumb-bg: #2a2830;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 40px 20px 60px;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 720px; margin: 0 auto; }
-  header { margin-bottom: 26px; }
-  h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+/* Convertly, in the browser.
+ *
+ * Light only, on purpose. The old build followed prefers-color-scheme and went
+ * dark on most phones; this one is warm paper everywhere, so the thing you see
+ * is the thing everyone sees.
+ *
+ * The CSS lives out here rather than in the page so the Content Security
+ * Policy can say style-src 'self' with no 'unsafe-inline': nothing in this
+ * build asks the browser to trust inline code. */
 
-  /* Drop zone */
-  .dropzone {
-    border: 1.5px dashed var(--line);
-    border-radius: var(--radius);
-    background: var(--card);
-    padding: 40px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color .15s, background .15s, transform .15s;
-  }
-  .dropzone:hover { border-color: var(--accent); }
-  .dropzone.over { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.008); }
-  .dropzone .big { font-size: 16px; font-weight: 550; }
-  .dropzone .small { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
-  .dropzone svg { width: 30px; height: 30px; stroke: var(--accent); fill: none; stroke-width: 1.6; margin-bottom: 10px; }
+:root {
+  --bg: #f7f4ee;             /* warm paper, not grey */
+  --surface: #ffffff;
+  --surface-sunk: #fbf9f5;
+  --ink: #19181a;
+  --ink-soft: #4a463f;
+  --muted: #726c62;
+  --faint: #938d82;
+  --line: #e7e1d7;
+  --line-strong: #d8d0c2;
 
-  /* Options */
-  .options { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 18px 2px 0; }
-  .label { font-size: 13px; color: var(--muted); }
-  .segmented { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
-  .segmented button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13.5px; padding: 5px 14px; border-radius: 7px; cursor: pointer; }
-  .segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 550; }
-  .quality { display: flex; align-items: center; gap: 8px; }
-  .quality input { width: 104px; accent-color: var(--accent); }
-  .quality output { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); width: 34px; }
-  .options.locked { opacity: .5; pointer-events: none; }
+  --green: #16874a;
+  --green-hover: #0f6b3a;
+  --green-soft: #e9f3ec;
+  --green-line: #bcdcc7;
 
-  /* File list */
-  .listhead { display: flex; align-items: baseline; justify-content: space-between; margin: 26px 2px 10px; }
-  .listhead h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: .06em; }
-  .listhead .count { font-size: 12.5px; color: var(--muted); }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 8px; }
+  --amber: #9a6b1f;
+  --amber-soft: #f6eedd;
+  --amber-line: #ead9b8;
+  --err: #b4392f;
+  --err-soft: #f9ebe9;
 
-  .thumb {
-    width: 46px; height: 46px; flex: none; border-radius: 7px;
-    background: var(--thumb-bg); border: 1px solid var(--line);
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-  }
-  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .thumb .ext { font-size: 9.5px; font-weight: 650; color: var(--muted); letter-spacing: .04em; }
-  .thumb.clickable { cursor: zoom-in; }
+  --radius: 18px;
+  --radius-lg: 24px;
+  --shadow: 0 1px 2px rgba(25, 24, 26, .04), 0 8px 24px rgba(25, 24, 26, .05);
+  --shadow-lift: 0 2px 6px rgba(25, 24, 26, .06), 0 18px 40px rgba(25, 24, 26, .09);
+}
 
-  .info { flex: 1; min-width: 0; }
-  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-  .sub2 { font-size: 12.5px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
-  .sub2.err { color: var(--err); }
-  .sub2.warn { color: var(--warn); }
-  .sub2 .arrow { opacity: .6; padding: 0 3px; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
 
-  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
 
-  button.dl, .btn {
-    border: 1px solid var(--line); background: var(--card); color: var(--text);
-    font: inherit; font-size: 13px; padding: 6px 13px; border-radius: 8px; cursor: pointer; white-space: nowrap;
-  }
-  button.dl { border-color: var(--accent); color: var(--accent); font-weight: 550; }
-  button.dl:hover, .btn:hover { background: var(--accent-soft); }
-  .remove {
-    border: 0; background: none; color: var(--muted); cursor: pointer;
-    font-size: 17px; line-height: 1; padding: 4px 6px; border-radius: 6px; flex: none;
-  }
-  .remove:hover { background: var(--accent-soft); color: var(--err); }
+.hidden { display: none !important; }
 
-  .actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
-  .actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 9px 20px; font-size: 14px; }
-  .actions .primary:hover:not(:disabled) { opacity: .9; }
-  .actions .primary:disabled { opacity: .4; cursor: default; }
-  .hidden { display: none !important; }
-  .tabs {
-    display: flex; gap: 3px; width: fit-content; margin: 0 0 20px;
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px;
-  }
-  .tabs button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13.5px; padding: 6px 18px; border-radius: 7px; cursor: pointer; }
-  .tabs button[aria-selected="true"] { background: var(--accent); color: #fff; font-weight: 550; }
+/* ------------------------------------------------------------------ header */
 
-  input.pages {
-    width: 104px; flex: none; font: inherit; font-size: 13px; padding: 5px 8px;
-    border-radius: 7px; border: 1px solid var(--line); background: var(--bg);
-    color: var(--text); text-align: center;
-  }
-  input.pages:focus { outline: none; border-color: var(--accent); }
-  input.pages.bad { border-color: var(--err); }
-  .order { display: flex; flex-direction: column; gap: 2px; flex: none; }
-  .mini { border: 1px solid var(--line); background: var(--card); color: var(--muted); cursor: pointer; border-radius: 5px; font-size: 9px; line-height: 1; padding: 2px 5px; }
-  .mini:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
-  .mini:disabled { opacity: .3; cursor: default; }
-  select.opt {
-    font: inherit; font-size: 13.5px; padding: 5px 26px 5px 10px;
-    border-radius: 8px; border: 1px solid var(--line);
-    background: var(--card); color: var(--text); cursor: pointer;
-    appearance: none;
-    background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-                      linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-    background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-  }
-  select.opt:focus { outline: none; border-color: var(--accent); }
-  select.opt.set { border-color: var(--accent); color: var(--accent); font-weight: 550; }
-  input.custom {
-    width: 92px; font: inherit; font-size: 13px; padding: 5px 8px;
-    border-radius: 7px; border: 1px solid var(--accent);
-    background: var(--bg); color: var(--text); text-align: center;
-  }
-  input.custom:focus { outline: none; }
-  input.custom.bad { border-color: var(--err); }
-  .options.second { margin-top: 10px; }
-  .quality.off { opacity: .45; }
-  .quality.off input { pointer-events: none; }
-  .hint { font-size: 12.5px; color: var(--muted); margin: 0 2px 10px; }
-  footer { margin-top: 30px; text-align: center; color: var(--muted); font-size: 12px; }
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(247, 244, 238, .85);
+  backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.bar {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 660;
+  letter-spacing: -.02em;
+  color: var(--ink);
+  text-decoration: none;
+  flex: none;
+}
+.mark {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: var(--green);
+  display: grid; place-items: center;
+  flex: none;
+}
+.mark svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.2; }
+
+nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+nav::-webkit-scrollbar { display: none; }
+
+nav button {
+  appearance: none; border: 0; background: none;
+  font: inherit; font-size: 14.5px; font-weight: 520;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: background .15s, color .15s;
+}
+nav button:hover { background: rgba(25, 24, 26, .05); color: var(--ink); }
+nav button[aria-current="true"] { background: var(--green-soft); color: var(--green-hover); font-weight: 600; }
+
+.soon {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--amber); background: var(--amber-soft);
+  padding: 2px 6px; border-radius: 5px;
+}
+
+/* Where other converters put "Log in / Sign up", this puts the reason it
+   exists -- in words that don't assume you know what a server is. */
+.promise-wrap { position: relative; flex: none; }
+.promise {
+  appearance: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 13px; color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.promise:hover { border-color: var(--green-line); background: var(--green-soft); }
+.promise svg { width: 13px; height: 13px; stroke: var(--green); fill: none; stroke-width: 2; flex: none; }
+.promise b { color: var(--ink-soft); font-weight: 580; white-space: nowrap; }
+.promise .said-short { display: none; }
+
+.promise-pop {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 18px 20px;
+  font-size: 13.5px; line-height: 1.55; color: var(--muted);
+  z-index: 30;
+}
+.promise-pop strong { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 7px; }
+.promise-pop p { margin: 0 0 9px; }
+.promise-pop p:last-child { margin-bottom: 0; }
+.promise-pop .proof {
+  color: var(--green-hover); background: var(--green-soft);
+  border-radius: 10px; padding: 9px 12px; font-weight: 520;
+}
+
+/* -------------------------------------------------------------------- main */
+
+main { max-width: 760px; margin: 0 auto; padding: 68px 24px 80px; }
+
+.headline { text-align: center; margin-bottom: 38px; }
+.headline h1 {
+  margin: 0;
+  font-size: clamp(38px, 6.4vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -.035em;
+  font-weight: 680;
+}
+.headline p { margin: 14px auto 0; max-width: 30em; font-size: 17px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- dropzone */
+
+.drop {
+  background: var(--surface);
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 52px 28px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .18s;
+}
+.drop.over {
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+.drop .art { width: 44px; height: 44px; margin: 0 auto 20px; stroke: var(--green); fill: none; stroke-width: 1.7; display: block; }
+.drop .hint { margin-top: 15px; font-size: 14px; color: var(--muted); }
+.drop .types { margin-top: 5px; font-size: 12.5px; color: var(--faint); }
+
+.cta {
+  appearance: none; border: 0;
+  background: var(--green); color: #fff;
+  font: inherit; font-size: 17px; font-weight: 600; letter-spacing: -.01em;
+  padding: 16px 40px;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 107, 58, .3), 0 10px 22px -8px rgba(15, 107, 58, .5);
+  transition: background .15s, transform .12s, box-shadow .15s;
+}
+.cta:hover:not(:disabled) { background: var(--green-hover); transform: translateY(-1px); }
+.cta:active:not(:disabled) { transform: translateY(0); }
+.cta:disabled { background: #c6c1b8; box-shadow: none; cursor: default; transform: none; }
+
+/* ----------------------------------------------------------------- options */
+
+.panel {
+  margin-top: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+}
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted);
+}
+.panel.locked { opacity: .5; pointer-events: none; }
+.row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.row + .row { margin-top: 18px; }
+
+.chip {
+  appearance: none;
+  font: inherit; font-size: 14px; font-weight: 520;
+  padding: 9px 17px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color .14s, background .14s, color .14s;
+}
+.chip:hover { border-color: var(--green-line); background: var(--green-soft); }
+.chip[aria-pressed="true"] {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-hover);
+  font-weight: 620;
+}
+
+.field {
+  font: inherit; font-size: 14px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunk);
+  color: var(--ink);
+  min-width: 0;
+}
+.field:focus { outline: none; border-color: var(--green); background: #fff; }
+/* Widths live here rather than on the element: style-src 'self' blocks inline
+   style attributes, so a style="" on the markup is silently dropped. */
+.size-field { width: 118px; }
+.edge-field { width: 108px; }
+.field.bad { border-color: var(--err); background: var(--err-soft); }
+
+.slider { display: flex; align-items: center; gap: 12px; }
+.slider span { font-size: 14px; color: var(--muted); }
+.slider input { accent-color: var(--green); width: 170px; max-width: 42vw; }
+.slider output { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); min-width: 32px; }
+.slider.off { opacity: .42; pointer-events: none; }
+
+/* What the result will actually weigh, measured rather than guessed. */
+.est {
+  font-size: 13.5px; font-weight: 580;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-hover);
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  padding: 6px 12px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.est.working { color: var(--muted); background: var(--surface-sunk); border-color: var(--line); font-weight: 500; }
+
+.note { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); }
+.note code {
+  background: var(--surface-sunk); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 6px; font-size: 12.5px;
+}
+
+.banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--radius);
+  padding: 15px 18px;
+  margin-top: 22px;
+  font-size: 14px;
+  color: #6f5115;
+}
+.banner b { color: #533c0c; }
+.banner-icon { font-size: 17px; line-height: 1; }
+.banner a { color: var(--green-hover); }
+
+/* ------------------------------------------------------------------- files */
+
+.files { margin-top: 22px; }
+.files-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 10px; }
+.files-head h2 { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.files-head span { font-size: 13px; color: var(--muted); }
+
+ul { list-style: none; margin: 0; padding: 0; }
+li.file {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 9px;
+  box-shadow: var(--shadow);
+}
+
+.thumb {
+  width: 44px; height: 44px; flex: none;
+  border-radius: 10px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em;
+  overflow: hidden;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb.clickable { cursor: zoom-in; }
+
+.meta { flex: 1; min-width: 0; }
+.meta .name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.meta .sub.err { color: var(--err); }
+.meta .sub.warn { color: var(--amber); }
+.sub .to { opacity: .55; padding: 0 5px; }
+.sub .est-inline { color: var(--green-hover); font-weight: 580; }
+
+.spinner {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--green);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.dl {
+  appearance: none;
+  border: 1px solid var(--green); background: var(--surface); color: var(--green-hover);
+  font: inherit; font-size: 13px; font-weight: 580;
+  padding: 8px 15px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+}
+.dl:hover { background: var(--green-soft); }
+.ghost {
+  appearance: none;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+  font: inherit; font-size: 13px;
+  padding: 8px 15px; border-radius: 10px; cursor: pointer; white-space: nowrap;
+}
+.ghost:hover { background: var(--surface-sunk); }
+.x {
+  appearance: none; border: 0; background: none; color: var(--muted);
+  font-size: 19px; line-height: 1; padding: 5px 7px; border-radius: 8px; cursor: pointer; flex: none;
+}
+.x:hover { background: var(--err-soft); color: var(--err); }
+
+/* The per-row control a PDF tool needs: order for Merge, pages for Edit. */
+.tool:empty { display: none; }
+.tool { flex: none; display: flex; align-items: center; gap: 8px; }
+.drop-label { font-size: 12.5px; color: var(--muted); }
+.pages-field { width: 112px; text-align: center; font-size: 13px; padding: 7px 9px; }
+
+.arrows { display: flex; flex-direction: column; gap: 3px; }
+.arrows button {
+  appearance: none;
+  border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+  border-radius: 6px; font-size: 9px; line-height: 1; padding: 3px 7px; cursor: pointer;
+}
+.arrows button:hover:not(:disabled) { background: var(--green-soft); color: var(--green-hover); border-color: var(--green-line); }
+.arrows button:disabled { opacity: .3; cursor: default; }
+
+.actions { display: flex; gap: 11px; align-items: center; margin-top: 24px; flex-wrap: wrap; }
+.actions .cta { font-size: 16px; padding: 14px 32px; }
+
+/* ------------------------------------------------------------------ footer */
+
+footer {
+  max-width: 760px; margin: 0 auto;
+  padding: 0 24px 60px;
+  text-align: center; color: var(--muted); font-size: 13px;
+}
+footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
+
+/* -------------------------------------------------------------- responsive */
+
+@media (max-width: 1080px) {
+  .promise .said-full { display: none; }
+  .promise .said-short { display: inline; }
+}
+@media (max-width: 860px) {
+  /* No room for both; the nav wins, and the footer still says it. */
+  .promise-wrap { display: none; }
+}
+@media (max-width: 760px) {
+  .bar { gap: 14px; padding: 0 16px; height: 62px; }
+  main { padding: 44px 16px 60px; }
+  footer { padding: 0 16px 48px; }
+  .drop { padding: 38px 18px; }
+  .drop .cta { width: 100%; }
+  .panel { padding: 18px 16px; }
+  li.file { gap: 11px; padding: 10px 11px; }
+  .pages-field { width: 84px; }
+  .actions .cta { flex: 1; }
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>Convertly</h1>
-    <div class="sub">Convert images and documents to JPG, JPEG, PNG or PDF. Runs entirely on your Mac — nothing is uploaded or saved.</div>
-  </header>
 
-  <nav class="tabs" id="tabs">
-    <button data-tab="convert" aria-selected="true">Convert</button>
-    <button data-tab="pdf" aria-selected="false">Edit PDF</button>
-  </nav>
+<header>
+  <div class="bar">
+    <a class="brand" href="#convert">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 9h12M12 5l4 4-4 4"/><path d="M20 15H8M12 19l-4-4 4-4"/>
+        </svg>
+      </span>
+      Convertly
+    </a>
 
-  <section id="tab-convert">
-  <div id="drop" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop files">
-    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+    <nav id="nav" aria-label="Tools">
+      <button type="button" data-tool="convert"  aria-current="true">Convert</button>
+      <button type="button" data-tool="compress" aria-current="false">Compress</button>
+      <button type="button" data-tool="resize"   aria-current="false">Resize</button>
+      <button type="button" data-tool="merge"    aria-current="false">Merge</button>
+      <button type="button" data-tool="edit"     aria-current="false">Edit</button>
+    </nav>
+
+    <div class="promise-wrap">
+      <button type="button" class="promise" id="promise" aria-expanded="false">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+        </svg>
+        <b class="said-full">Your files never leave this Mac</b>
+        <b class="said-short">Stays on your Mac</b>
+      </button>
+      <div class="promise-pop" id="promisePop" hidden>
+        <strong>Your files stay with you.</strong>
+        <p>Convertly does the work on your own Mac, in a program running there.
+        Your photos and documents are never sent over the internet — not to us,
+        not to anyone — so there is no copy anywhere for someone else to open.</p>
+        <p class="proof">Turn your Wi‑Fi off and it still works. That is the whole proof.</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="headline">
+    <h1 id="title">Convert</h1>
+    <p id="blurb">Turn photos and documents into JPG, PNG or PDF. Everything happens on your Mac.</p>
+  </div>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose or drop files">
+    <svg class="art" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/>
+      <path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/>
     </svg>
-    <div class="big">Drop files here</div>
-    <div class="small">HEIC · PNG · JPEG · TIFF · GIF · BMP · WebP · PDF · Word · Pages — or click to choose</div>
+    <button type="button" class="cta" id="choose">Choose files</button>
+    <div class="hint">or drop them here</div>
+    <div class="types" id="types"></div>
   </div>
-  <input type="file" id="picker" class="hidden" multiple
-         accept=".heic,.heif,.png,.jpg,.jpeg,.tif,.tiff,.gif,.bmp,.webp,.pdf,.doc,.docx,.rtf,.pages,.key,.numbers">
+  <input type="file" id="picker" class="hidden" multiple>
 
-  <div class="options" id="options">
-    <span class="label">Convert to</span>
-    <div class="segmented" id="formats">
-      <button data-fmt="jpg" aria-pressed="true">JPG</button>
-      <button data-fmt="jpeg" aria-pressed="false">JPEG</button>
-      <button data-fmt="png" aria-pressed="false">PNG</button>
-      <button data-fmt="pdf" aria-pressed="false">PDF</button>
+  <!-- Convert ---------------------------------------------------------- -->
+  <section class="panel hidden" id="opt-convert">
+    <h2>Convert to</h2>
+    <div class="row" id="formats">
+      <button type="button" class="chip" data-fmt="jpg"  aria-pressed="true">JPG</button>
+      <button type="button" class="chip" data-fmt="jpeg" aria-pressed="false">JPEG</button>
+      <button type="button" class="chip" data-fmt="png"  aria-pressed="false">PNG</button>
+      <button type="button" class="chip" data-fmt="pdf"  aria-pressed="false">PDF</button>
     </div>
-    <div class="quality" id="qualityBox">
-      <span class="label">Quality</span>
-      <input type="range" id="quality" min="40" max="100" step="5" value="85">
-      <output id="qval">85</output>
+    <p class="note" id="fmt-note"></p>
+    <div class="row">
+      <div class="slider" id="qbox">
+        <span>Quality</span>
+        <input type="range" id="quality" min="40" max="100" step="5" value="85" aria-label="JPEG quality">
+        <output id="qval">85</output>
+      </div>
+      <!-- The real size at this setting, measured by encoding the picture. -->
+      <span class="est hidden" id="qest"></span>
     </div>
-  </div>
-
-  <div class="options second" id="options2">
-    <span class="label">Resize</span>
-    <select class="opt" id="resize" aria-label="Resize the longest edge">
-      <option value="">Original size</option>
-      <option value="4000">Longest edge 4000 px</option>
-      <option value="2500">Longest edge 2500 px</option>
-      <option value="2000">Longest edge 2000 px</option>
-      <option value="1600">Longest edge 1600 px</option>
-      <option value="1200">Longest edge 1200 px</option>
-      <option value="800">Longest edge 800 px</option>
-    </select>
-
-    <span class="label">Max file size</span>
-    <select class="opt" id="target" aria-label="Largest allowed file size">
-      <option value="">No limit</option>
-      <option value="200000">200 KB</option>
-      <option value="500000">500 KB</option>
-      <option value="1000000">1 MB</option>
-      <option value="2000000">2 MB</option>
-      <option value="5000000">5 MB</option>
-      <option value="10000000">10 MB</option>
-      <option value="custom">Custom…</option>
-    </select>
-    <input class="custom hidden" id="targetCustom" type="text"
-           placeholder="750 KB" aria-label="Custom maximum file size">
-  </div>
-
-  <div class="listhead hidden" id="listhead">
-    <h2>Your files</h2>
-    <span class="count" id="count"></span>
-  </div>
-  <ul id="list"></ul>
-
-  <div class="actions hidden" id="actions">
-    <button class="btn primary" id="convert">Convert</button>
-    <button class="btn hidden" id="downloadAll">Download all</button>
-    <button class="btn" id="clear">Clear</button>
-  </div>
-
   </section>
 
-  <section id="tab-pdf" class="hidden">
-    <div id="pdfdrop" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop PDFs">
-      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 16V4m0 0L8 8m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-      </svg>
-      <div class="big">Drop PDFs here</div>
-      <div class="small">Keep only the pages you want, or join several PDFs into one</div>
+  <!-- Compress --------------------------------------------------------- -->
+  <section class="panel hidden" id="opt-compress">
+    <h2>Keep it under</h2>
+    <div class="row" id="targets">
+      <button type="button" class="chip" data-bytes="200000"  aria-pressed="false">200 KB</button>
+      <button type="button" class="chip" data-bytes="500000"  aria-pressed="false">500 KB</button>
+      <button type="button" class="chip" data-bytes="1000000" aria-pressed="true">1 MB</button>
+      <button type="button" class="chip" data-bytes="2000000" aria-pressed="false">2 MB</button>
+      <button type="button" class="chip" data-bytes="5000000" aria-pressed="false">5 MB</button>
+      <input class="field size-field" id="targetCustom" placeholder="750 KB" aria-label="Custom size limit">
     </div>
-    <input type="file" id="pdfpicker" class="hidden" multiple accept=".pdf,application/pdf">
-
-    <div class="listhead hidden" id="pdflisthead">
-      <h2>Your PDFs</h2><span class="count" id="pdfcount"></span>
-    </div>
-    <div class="hint hidden" id="pdfhint">Pages: leave blank for all, or try <strong>2-4</strong>, <strong>1,3,5-7</strong>, <strong>2-</strong> for page 2 onwards.</div>
-    <ul id="pdflist"></ul>
-
-    <div class="actions hidden" id="pdfactions">
-      <button class="btn primary" id="pdfprimary">Extract pages</button>
-      <button class="btn hidden" id="pdfeach">Save each separately</button>
-      <button class="btn" id="pdfclear">Clear</button>
-    </div>
-
-    <div class="listhead hidden" id="pdfreshead"><h2>Result</h2><span class="count" id="pdfrescount"></span></div>
-    <ul id="pdfresults"></ul>
+    <p class="note">Quality is lowered first, so the picture keeps its
+    dimensions. Only if that is not enough is it made smaller — and the row
+    tells you which happened. The result is a JPG, because that is the format
+    that can trade quality for size.</p>
   </section>
 
-  <footer>Files are converted in memory and discarded. Nothing leaves this machine.</footer>
-</div>
+  <!-- Resize ----------------------------------------------------------- -->
+  <section class="panel hidden" id="opt-resize">
+    <h2>Longest edge</h2>
+    <div class="row" id="edges">
+      <button type="button" class="chip" data-px="4000" aria-pressed="false">4000 px</button>
+      <button type="button" class="chip" data-px="2500" aria-pressed="false">2500 px</button>
+      <button type="button" class="chip" data-px="1600" aria-pressed="true">1600 px</button>
+      <button type="button" class="chip" data-px="1200" aria-pressed="false">1200 px</button>
+      <button type="button" class="chip" data-px="800"  aria-pressed="false">800 px</button>
+      <input class="field edge-field" id="edgeCustom" placeholder="1080 px" aria-label="Custom longest edge">
+    </div>
+    <p class="note">The shape of the picture is always kept, and it is never
+    enlarged — ask for more than it has and it is left alone. A PNG stays a PNG
+    so it stays lossless; anything else comes out as a JPG.</p>
+  </section>
+
+  <!-- Merge ------------------------------------------------------------ -->
+  <section class="panel hidden" id="opt-merge">
+    <h2>Order</h2>
+    <p class="note" id="merge-note">Add two or more PDFs. They are joined top to
+    bottom — use the arrows on each row to move one up or down. Pages keep their
+    original quality: nothing is re-compressed on the way through.</p>
+  </section>
+
+  <!-- Edit ------------------------------------------------------------- -->
+  <section class="panel hidden" id="opt-edit">
+    <h2>Pages to remove</h2>
+    <p class="note">Type the pages you want gone on each file's row. Everything
+    else is kept, in its original order.</p>
+    <p class="note">
+      <code>3</code> drops page 3 &nbsp;·&nbsp;
+      <code>2-4</code> drops pages 2 to 4 &nbsp;·&nbsp;
+      <code>1,7-9</code> drops page 1 and pages 7 to 9 &nbsp;·&nbsp;
+      <code>2-</code> drops page 2 to the end
+    </p>
+  </section>
+
+  <!-- Not built here yet ----------------------------------------------- -->
+  <div class="banner hidden" id="soon-banner">
+    <span class="banner-icon" aria-hidden="true">🚧</span>
+    <div id="soon-text"></div>
+  </div>
+
+  <!-- Files ------------------------------------------------------------ -->
+  <div class="files hidden" id="files">
+    <div class="files-head">
+      <h2>Your files</h2>
+      <span id="count"></span>
+    </div>
+    <ul id="list"></ul>
+    <div class="actions">
+      <button type="button" class="cta" id="go">Convert</button>
+      <button type="button" class="ghost hidden" id="downloadAll">Download all</button>
+      <button type="button" class="ghost" id="clear">Clear</button>
+    </div>
+
+    <div class="files hidden" id="resultBox">
+      <div class="files-head"><h2>Result</h2></div>
+      <ul id="results"></ul>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="rule"></div>
+  Your files never leave this Mac. No accounts, no tracking, nothing stored —
+  and it works with the Wi‑Fi off.
+</footer>
 
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const drop = $('drop'), picker = $('picker'), list = $('list');
-  const quality = $('quality'), qval = $('qval');
-  const convertBtn = $('convert'), downloadAllBtn = $('downloadAll');
 
-  const ACCEPT = /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp|pdf|docx?|rtf|pages|key|numbers)$/i;
+  // Same five tools as the browser build, in the same order, saying the same
+  // things. What differs is underneath: each job is posted to the local
+  // server, which has sips, Quick Look and Microsoft Word to call on.
+  const IMAGE_TYPES = 'HEIC · PNG · JPEG · TIFF · GIF · BMP · WebP';
 
-  let format = 'jpg';
+  const TOOLS = {
+    convert: {
+      title: 'Convert',
+      blurb: 'Turn photos and documents into JPG, PNG or PDF. Everything happens on your Mac.',
+      types: IMAGE_TYPES + ' · PDF · Word · Pages',
+      panel: 'opt-convert',
+      action: 'Convert',
+      accept: /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp|pdf|docx?|rtf|pages|key|numbers)$/i,
+    },
+    compress: {
+      title: 'Compress',
+      blurb: 'Get a picture under a size limit — for the upload that only allows 1 MB.',
+      types: IMAGE_TYPES,
+      panel: 'opt-compress',
+      action: 'Compress',
+      accept: /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp)$/i,
+    },
+    resize: {
+      title: 'Resize',
+      blurb: 'Cap the longest edge, keeping the shape of the picture exactly as it was.',
+      types: IMAGE_TYPES,
+      panel: 'opt-resize',
+      action: 'Resize',
+      accept: /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp)$/i,
+    },
+    merge: {
+      title: 'Merge',
+      blurb: 'Join PDFs into one document, in the order you choose.',
+      types: 'PDF only',
+      panel: 'opt-merge',
+      action: 'Merge into one',
+      accept: /\.pdf$/i,
+      pdf: true,
+    },
+    edit: {
+      title: 'Edit',
+      blurb: 'Remove the pages you do not want, and keep the rest.',
+      types: 'PDF only',
+      panel: 'opt-edit',
+      action: 'Remove pages',
+      accept: /\.pdf$/i,
+      pdf: true,
+    },
+  };
+
+  const PANELS = ['opt-convert', 'opt-compress', 'opt-resize', 'opt-merge', 'opt-edit'];
+  const isPdfTool = () => Boolean(TOOLS[current].pdf);
+
+  let current = 'convert';
   let items = [];
+  let results = [];
   let running = false;
+  let generation = 0;
 
-  // Decimal units, matching Finder and the limits upload sites quote.
-  // floor(x + 0.5) is written out because Python's round() rounds half to
-  // even and has to match this. See shared/spec/file-sizes.json.
-  const fmtSize = b => b < 1000000
+  // --- shared rules, mirrored from shared/spec ----------------------------
+
+  // Decimal units, the way Finder shows file sizes. floor(x + 0.5) is written
+  // out because Python's round() rounds half to even and has to match this.
+  const humanSize = b => b < 1000000
     ? Math.max(1, Math.floor(b / 1000 + 0.5)) + ' KB'
     : (b / 1000000).toFixed(1) + ' MB';
-  const extOf = n => (n.split('.').pop() || '').toUpperCase().slice(0, 5);
 
-  // --- adding files ------------------------------------------------------
-
-  drop.addEventListener('click', () => picker.click());
-  drop.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
-  });
-  picker.addEventListener('change', () => { add([...picker.files]); picker.value = ''; });
-
-  ['dragenter', 'dragover'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
-  // Don't let a stray drop navigate the page away.
-  window.addEventListener('dragover', e => e.preventDefault());
-  window.addEventListener('drop', e => e.preventDefault());
-
-  function add(files) {
-    const accepted = files.filter(f => ACCEPT.test(f.name));
-    accepted.forEach(file => {
-      const item = { file, status: 'ready', previewUrl: null, resultUrl: null,
-                     outName: null, outSize: 0, note: null, error: null };
-      item.row = buildRow(item);
-      list.appendChild(item.row);
-      items.push(item);
-      loadPreview(item);
-    });
-    const skipped = files.length - accepted.length;
-    if (skipped) flash(`Skipped ${skipped} unsupported file${skipped > 1 ? 's' : ''}`);
-    render();
-  }
-
-  function flash(text) {
-    const row = document.createElement('li');
-    row.innerHTML = '<span class="info"><div class="name"></div></span>';
-    const n = row.querySelector('.name');
-    n.textContent = text;
-    n.style.color = 'var(--muted)';
-    list.appendChild(row);
-    setTimeout(() => row.remove(), 4000);
-  }
-
-  // --- one row -----------------------------------------------------------
-
-  function buildRow(item) {
-    const row = document.createElement('li');
-    row.innerHTML = `
-      <div class="thumb"><span class="ext"></span></div>
-      <div class="info"><div class="name"></div><div class="sub2"></div></div>
-      <div class="act"></div>
-      <button class="remove" title="Remove" aria-label="Remove">&times;</button>`;
-    row.querySelector('.ext').textContent = extOf(item.file.name);
-    row.querySelector('.name').textContent = item.file.name;
-    row.querySelector('.remove').onclick = () => removeItem(item);
-    return row;
-  }
-
-  function removeItem(item) {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
-    item.row.remove();
-    items = items.filter(i => i !== item);
-    render();
-  }
-
-  // Thumbnails come from the server -- the browser can't decode HEIC or render
-  // a PDF/Word page on its own. Kept to a few at a time so we don't spawn a
-  // pile of helper processes at once.
-  let previewQueue = Promise.resolve();
-  let previewActive = 0;
-  function loadPreview(item) {
-    previewQueue = previewQueue.then(async () => {
-      while (previewActive >= 3) await new Promise(r => setTimeout(r, 40));
-      previewActive++;
-      try {
-        const res = await fetch('/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/octet-stream',
-                     'X-Filename': encodeURIComponent(item.file.name) },
-          body: item.file,
-        });
-        if (res.status === 200) {
-          const blob = await res.blob();
-          if (!items.includes(item)) return;      // removed while we worked
-          item.previewUrl = URL.createObjectURL(blob);
-          showThumb(item, item.previewUrl);
-        }
-      } catch (_) {
-        /* no preview: the row keeps its file-type badge */
-      } finally {
-        previewActive--;
-      }
-    });
-  }
-
-  function showThumb(item, url) {
-    const thumb = item.row.querySelector('.thumb');
-    thumb.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = url;
-    img.alt = '';
-    thumb.appendChild(img);
-    thumb.classList.add('clickable');
-    thumb.title = 'Open a bigger preview';
-    thumb.onclick = () => window.open(item.resultUrl || url, '_blank');
-  }
-
-  function renderRow(item) {
-    const sub = item.row.querySelector('.sub2');
-    const act = item.row.querySelector('.act');
-    const name = item.row.querySelector('.name');
-    sub.className = 'sub2';
-    act.innerHTML = '';
-
-    if (item.status === 'ready') {
-      name.textContent = item.file.name;
-      sub.textContent = `${extOf(item.file.name)} · ${fmtSize(item.file.size)}`;
-    } else if (item.status === 'converting') {
-      sub.textContent = 'Converting…';
-      act.innerHTML = '<span class="spinner"></span>';
-    } else if (item.status === 'done') {
-      name.textContent = item.outName;
-      sub.innerHTML = '';
-      sub.append(`${fmtSize(item.file.size)}`);
-      const arrow = document.createElement('span');
-      arrow.className = 'arrow'; arrow.textContent = '→';
-      sub.append(arrow, fmtSize(item.outSize));
-      if (item.note) { sub.className = 'sub2 warn'; sub.append(` · ${item.note}`); }
-      act.appendChild(button('dl', 'Download', () => save(item)));
-    } else {
-      name.textContent = item.file.name;
-      sub.className = 'sub2 err';
-      sub.textContent = item.error;
-      act.appendChild(button('btn', 'Retry', () => { item.status = 'ready'; render(); convertAll(); }));
-    }
-  }
-
-  function button(cls, text, onclick) {
-    const b = document.createElement('button');
-    b.className = cls; b.textContent = text; b.onclick = onclick;
-    return b;
-  }
-
-  // --- overall rendering -------------------------------------------------
-
-  function render() {
-    items.forEach(renderRow);
-    const pending = items.filter(i => i.status === 'ready' || i.status === 'error').length;
-    const done = items.filter(i => i.status === 'done').length;
-
-    $('listhead').classList.toggle('hidden', items.length === 0);
-    $('actions').classList.toggle('hidden', items.length === 0);
-    $('count').textContent = items.length
-      ? `${items.length} file${items.length > 1 ? 's' : ''}${done ? ` · ${done} converted` : ''}`
-      : '';
-
-    convertBtn.disabled = running || pending === 0;
-    convertBtn.textContent = running
-      ? 'Converting…'
-      : pending === 0 && done
-        ? `Converted to ${format.toUpperCase()}`
-        : `Convert ${pending} file${pending === 1 ? '' : 's'} to ${format.toUpperCase()}`;
-    downloadAllBtn.classList.toggle('hidden', done < 2);
-    $('options').classList.toggle('locked', running);
-    $('options2').classList.toggle('locked', running);
-  }
-
-  // --- options -----------------------------------------------------------
-
-  $('formats').addEventListener('click', e => {
-    const btn = e.target.closest('button');
-    if (!btn || running) return;
-    format = btn.dataset.fmt;
-    [...e.currentTarget.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
-    syncOptions();
-    invalidate();
-  });
-  quality.addEventListener('input', () => { qval.value = quality.value; });
-  quality.addEventListener('change', invalidate);
-
-  const resizeSel = $('resize'), targetSel = $('target'), targetCustom = $('targetCustom');
-
-  // "750 KB", "1.5 MB", "900000 B", or a bare number meaning KB.
-  // One decimal point only: a loose [\d.,]+ here read "1.2.3 MB" as 1.2 MB
-  // and silently applied a limit the user never asked for. Pinned by
-  // shared/spec/file-sizes.json.
+  // "750 KB", "1.5 MB", "900000 B", or a bare number meaning KB. One decimal
+  // point only: a loose [\d.,]+ read "1.2.3 MB" as 1.2 MB.
   function parseSize(text) {
     const m = String(text || '').trim().toLowerCase()
       .match(/^([\d,]*\.?\d+)\s*(g|m|k|b|gb|mb|kb|bytes?)?$/);
@@ -487,118 +673,667 @@
     const unit = (m[2] || 'kb').replace(/^bytes?$/, 'b');
     const scale = { b: 1, k: 1e3, kb: 1e3, m: 1e6, mb: 1e6, g: 1e9, gb: 1e9 }[unit];
     const bytes = Math.round(value * scale);
-    return bytes >= 1000 ? bytes : null;      // below 1 KB is never achievable
+    return bytes >= 1000 ? bytes : null;
   }
 
-  function targetBytes() {
-    if (targetSel.value === 'custom') return parseSize(targetCustom.value);
-    return targetSel.value ? Number(targetSel.value) : null;
+  // Mirrors naming.py, pinned by shared/spec/output-names.json.
+  function stemOf(filename) {
+    const base = String(filename || '').split(/[\\/]/).pop();
+    const lead = base.length - base.replace(/^\.+/, '').length;
+    const dot = base.lastIndexOf('.');
+    const stem = (dot < lead ? base : base.slice(0, dot))
+      .replace(/[\x00-\x1f\x7f]/g, '')
+      .trim().replace(/^\.+|\.+$/g, '').trim();
+    return stem || 'file';
   }
-
-  // Which formats keep every pixel, so have no quality to choose.
-  // Pinned by shared/spec/file-kinds.json.
+  const removedName = (name, spec) => {
+    const tidy = String(spec || '').trim();
+    return tidy ? `${stemOf(name)}-without-${tidy.replace(/[,\s]+/g, '_')}.pdf`
+                : `${stemOf(name)}-copy.pdf`;
+  };
+  const COMBINED_NAME = 'combined.pdf';
   const LOSSLESS = ['png'];
 
-  function syncOptions() {
-    const custom = targetSel.value === 'custom';
-    targetCustom.classList.toggle('hidden', !custom);
-    if (custom) targetCustom.classList.toggle('bad', !parseSize(targetCustom.value));
-    const target = targetBytes();
-    resizeSel.classList.toggle('set', !!resizeSel.value);
-    targetSel.classList.toggle('set', !!targetSel.value);
-    // Two reasons the slider can stop applying, and they are different things,
-    // so the readout says which: PNG keeps every pixel and has no quality to
-    // set at all, while a size budget picks the best quality that fits.
-    const lossless = LOSSLESS.includes(format);
-    $('qualityBox').classList.toggle('off', lossless || !!target);
-    $('qualityBox').title = lossless
-      ? 'PNG keeps every pixel, so there is no quality to choose'
-      : target
-        ? 'With a size limit, the best quality that fits is chosen for you'
-        : '';
-    qval.value = lossless ? 'n/a' : target ? 'auto' : quality.value;
-  }
+  const badge = n => ((n.split('.').pop() || 'file')).toUpperCase().slice(0, 5);
+  const extOf = n => (n.split('.').pop() || '').toLowerCase();
 
-  [resizeSel, targetSel].forEach(el => el.addEventListener('change', () => {
-    syncOptions();
-    invalidate();
-  }));
-  targetCustom.addEventListener('input', syncOptions);
-  targetCustom.addEventListener('change', invalidate);
+  // --- talking to the local server ---------------------------------------
 
-  function invalidate() {
-    // Settings changed, so previous results no longer match what's selected.
-    // Nothing re-converts until Convert is pressed again.
-    items.forEach(item => {
-      if (item.status !== 'done') return;
-      URL.revokeObjectURL(item.resultUrl);
-      item.resultUrl = null; item.outName = null; item.note = null;
-      item.status = 'ready';
-      if (item.previewUrl) showThumb(item, item.previewUrl);
-    });
-    render();
-  }
-
-  // --- converting --------------------------------------------------------
-
-  convertBtn.onclick = () => convertAll();
-
-  async function convertAll() {
-    if (running) return;
-    running = true;
-    render();
-    try {
-      for (const item of items) {
-        if (item.status !== 'ready' && item.status !== 'error') continue;
-        item.status = 'converting';
-        renderRow(item);
-        await convertOne(item);
-        renderRow(item);
-      }
-    } finally {
-      running = false;
-      render();
-    }
-  }
-
-  async function send(item) {
-    const target = targetBytes();
-    // A budget searches for the best quality that fits, so it needs headroom
-    // above the slider's value rather than the slider's value itself.
-    const params = new URLSearchParams({ format, quality: target ? 95 : quality.value });
-    if (resizeSel.value) params.set('max_px', resizeSel.value);
-    if (target) params.set('target', String(target));
-    const res = await fetch(`/convert?${params}`, {
+  async function post(path, body, headers = {}) {
+    const res = await fetch(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream',
-                 'X-Filename': encodeURIComponent(item.file.name) },
-      body: item.file,
+      headers: { 'Content-Type': 'application/octet-stream', ...headers },
+      body,
     });
     if (!res.ok) throw new Error((await res.text()) || `Error ${res.status}`);
     return res;
   }
 
-  async function convertOne(item) {
+  function framed(files) {
+    const parts = [];
+    for (const f of files) {
+      const len = new Uint8Array(4);
+      new DataView(len.buffer).setUint32(0, f.size, false);
+      parts.push(len, f);
+    }
+    return new Blob(parts);
+  }
+
+  function convertParams(file) {
+    const p = new URLSearchParams();
+    if (current === 'compress') {
+      p.set('format', 'jpg');
+      p.set('quality', '95');
+      p.set('target', String(targetBytes()));
+    } else if (current === 'resize') {
+      p.set('format', extOf(file.name) === 'png' ? 'png' : 'jpg');
+      p.set('quality', $('quality').value);
+      p.set('max_px', String(maxPx()));
+    } else {
+      p.set('format', chosenFormat());
+      p.set('quality', $('quality').value);
+    }
+    return p;
+  }
+
+  // --- which tool ---------------------------------------------------------
+
+  function showTool(name) {
+    current = TOOLS[name] ? name : 'convert';
+    const spec = TOOLS[current];
+    $('title').textContent = spec.title;
+    $('blurb').textContent = spec.blurb;
+    $('types').textContent = spec.types;
+    PANELS.forEach(id => $(id).classList.toggle('hidden', id !== spec.panel));
+    $('soon-banner').classList.add('hidden');
+    [...$('nav').children].forEach(b =>
+      b.setAttribute('aria-current', String(b.dataset.tool === current)));
+    if (location.hash.slice(1) !== current) history.replaceState(null, '', '#' + current);
+    clearResults();
+    items.forEach(checkSpec);
+    invalidate();
+    scheduleEstimate();
+  }
+
+  $('nav').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (btn && !running) showTool(btn.dataset.tool);
+  });
+  window.addEventListener('hashchange', () => showTool(location.hash.slice(1)));
+
+  // --- options ------------------------------------------------------------
+
+  const pickedChip = (id, attr) => {
+    const on = $(id).querySelector('.chip[aria-pressed="true"]');
+    return on ? Number(on.dataset[attr]) : null;
+  };
+  const chosenFormat = () => {
+    const on = $('formats').querySelector('.chip[aria-pressed="true"]');
+    return on ? on.dataset.fmt : 'jpg';
+  };
+  function targetBytes() {
+    if ($('targetCustom').value.trim()) return parseSize($('targetCustom').value);
+    return pickedChip('targets', 'bytes');
+  }
+  function maxPx() {
+    const typed = $('edgeCustom').value.trim();
+    if (typed) {
+      const px = parseInt(typed, 10);
+      return Number.isFinite(px) && px > 0 ? px : null;
+    }
+    return pickedChip('edges', 'px');
+  }
+
+  function ready() {
+    if (current === 'compress') return targetBytes() !== null;
+    if (current === 'resize') return maxPx() !== null;
+    if (current === 'merge') return usablePdfs().length >= 2;
+    if (current === 'edit') {
+      const usable = usablePdfs();
+      return usable.length > 0 && usable.every(i => !i.specError)
+        && usable.some(i => (i.spec || '').trim());
+    }
+    return true;
+  }
+
+  const usablePdfs = () => items.filter(i => i.pages !== null && i.status !== 'unsupported');
+
+  function blockedReason() {
+    if (running || items.length === 0) return null;
+    const usable = usablePdfs();
+    if (current === 'merge' && usable.length === 1) return 'Add another PDF to merge with';
+    if (current === 'edit' && usable.length && !usable.some(i => (i.spec || '').trim())) {
+      return 'Type which pages to remove';
+    }
+    if (current === 'compress' && targetBytes() === null) return 'Choose a size limit';
+    if (current === 'resize' && maxPx() === null) return 'Choose a size';
+    return null;
+  }
+
+  function chipGroup(id, after) {
+    $(id).addEventListener('click', e => {
+      const chip = e.target.closest('.chip');
+      if (!chip || running) return;
+      [...$(id).querySelectorAll('.chip')].forEach(c =>
+        c.setAttribute('aria-pressed', String(c === chip)));
+      if (after) after();
+      invalidate();
+    });
+  }
+  const clearChips = id =>
+    [...$(id).querySelectorAll('.chip')].forEach(c => c.setAttribute('aria-pressed', 'false'));
+
+  chipGroup('formats', () => { syncFormat(); scheduleEstimate(); });
+  chipGroup('targets', () => { $('targetCustom').value = ''; $('targetCustom').classList.remove('bad'); });
+  chipGroup('edges', () => { $('edgeCustom').value = ''; $('edgeCustom').classList.remove('bad'); });
+
+  $('targetCustom').addEventListener('input', () => {
+    const typed = $('targetCustom').value.trim();
+    if (typed) clearChips('targets');
+    $('targetCustom').classList.toggle('bad', !!typed && parseSize(typed) === null);
+    render();
+  });
+  $('targetCustom').addEventListener('change', invalidate);
+  $('edgeCustom').addEventListener('input', () => {
+    const typed = $('edgeCustom').value.trim();
+    if (typed) clearChips('edges');
+    const px = parseInt(typed, 10);
+    $('edgeCustom').classList.toggle('bad', !!typed && !(Number.isFinite(px) && px > 0));
+    render();
+  });
+  $('edgeCustom').addEventListener('change', invalidate);
+  $('quality').addEventListener('input', () => {
+    if ($('qval').value !== 'n/a') $('qval').value = $('quality').value;
+    scheduleEstimate();
+  });
+  $('quality').addEventListener('change', invalidate);
+
+  function syncFormat() {
+    const format = chosenFormat();
+    const lossless = LOSSLESS.includes(format);
+    $('qbox').classList.toggle('off', lossless);
+    $('qbox').title = lossless ? 'PNG keeps every pixel, so there is no quality to choose' : '';
+    $('qval').value = lossless ? 'n/a' : $('quality').value;
+    $('fmt-note').textContent =
+      format === 'png'
+        ? 'PNG keeps every pixel. Best for screenshots, logos and anything with transparency — expect photographs to come out larger than the JPEG they came from.'
+        : format === 'pdf'
+          ? 'The picture is placed on a page at the quality you choose, and embedded without being compressed a second time.'
+          : 'JPG is right for photographs. PNG keeps every pixel — better for screenshots and logos, but larger.';
+  }
+
+  // --- files --------------------------------------------------------------
+
+  const drop = $('drop'), picker = $('picker');
+  $('choose').onclick = e => { e.stopPropagation(); picker.click(); };
+  drop.addEventListener('click', () => picker.click());
+  drop.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
+  });
+  picker.addEventListener('change', () => { add([...picker.files]); picker.value = ''; });
+  ['dragenter', 'dragover'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => e.preventDefault());
+
+  function add(files) {
+    for (const file of files) {
+      const ok = TOOLS[current].accept.test(file.name);
+      items.push({
+        file,
+        status: ok ? 'ready' : 'unsupported',
+        error: ok ? null : `${TOOLS[current].title} does not take ${badge(file.name)} files`,
+        row: null, thumbUrl: null, resultUrl: null,
+        outName: null, outSize: 0, note: null, estimate: null,
+        pages: null, spec: '', specError: null,
+      });
+    }
+    render();
+    prepare();
+  }
+
+  function release(item) {
+    if (item.thumbUrl) URL.revokeObjectURL(item.thumbUrl);
+    if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+    item.thumbUrl = item.resultUrl = null;
+  }
+
+  let preparing = false;
+  async function prepare() {
+    if (preparing) return;
+    preparing = true;
     try {
-      let res;
-      try {
-        res = await send(item);
-      } catch (err) {
-        // A dropped connection or a briefly unreadable file: worth one retry.
-        if (err.name !== 'TypeError') throw err;
-        await new Promise(r => setTimeout(r, 300));
-        res = await send(item);
+      for (const item of items) {
+        if (item.status === 'unsupported') continue;
+
+        if (isPdfTool() && item.pages === null && item.status !== 'error') {
+          try {
+            const res = await post('/pdf/info', item.file);
+            item.pages = (await res.json()).pages;
+          } catch (err) {
+            item.status = 'error';
+            item.error = err.message || "Couldn't read this PDF";
+          }
+          render();
+          continue;
+        }
+        if (item.thumbUrl) continue;
+        try {
+          const res = await post('/preview', item.file,
+            { 'X-Filename': encodeURIComponent(item.file.name) });
+          if (res.status === 200 && items.includes(item)) {
+            item.thumbUrl = URL.createObjectURL(await res.blob());
+            showThumb(item, item.thumbUrl);
+          }
+        } catch (_) { /* the row keeps its file-type badge */ }
       }
+    } finally {
+      preparing = false;
+      scheduleEstimate();
+    }
+  }
+
+  function showThumb(item, url) {
+    const thumb = item.row && item.row.querySelector('.thumb');
+    if (!thumb) return;
+    thumb.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = url; img.alt = '';
+    thumb.appendChild(img);
+    thumb.classList.add('clickable');
+    thumb.title = 'Open a bigger preview';
+    thumb.onclick = () => window.open(item.resultUrl || url, '_blank');
+  }
+
+  // --- what it will actually weigh ---------------------------------------
+  //
+  // The server is asked to do the real conversion and the result measured, so
+  // the number beside the slider is the size of the file you will get -- not
+  // an estimate from a different encoder than the one that will be used.
+
+  let estimateRun = 0, estimateTimer = null;
+  const ESTIMATE_LIMIT = 4;
+
+  function scheduleEstimate() {
+    clearTimeout(estimateTimer);
+    const box = $('qest');
+    const measurable = items.filter(i => i.status === 'ready' || i.status === 'done');
+    if (current !== 'convert' || chosenFormat() === 'pdf' || measurable.length === 0) {
+      box.classList.add('hidden');
+      items.forEach(i => { i.estimate = null; });
+      return;
+    }
+    box.classList.remove('hidden');
+    box.classList.add('working');
+    box.textContent = 'measuring…';
+    estimateTimer = setTimeout(runEstimate, 200);
+  }
+
+  async function runEstimate() {
+    const mine = ++estimateRun;
+    const measurable = items
+      .filter(i => i.status === 'ready' || i.status === 'done')
+      .slice(0, ESTIMATE_LIMIT);
+    for (const item of measurable) {
+      try {
+        const res = await post(`/convert?${convertParams(item.file)}`, item.file,
+          { 'X-Filename': encodeURIComponent(item.file.name) });
+        const blob = await res.blob();
+        if (mine !== estimateRun) return;
+        item.estimate = blob.size;
+      } catch (_) {
+        item.estimate = null;
+      }
+    }
+    if (mine !== estimateRun) return;
+    const measured = items.filter(i => i.estimate);
+    const total = measured.reduce((n, i) => n + i.estimate, 0);
+    const box = $('qest');
+    box.classList.remove('working');
+    box.textContent = measured.length > 1
+      ? `about ${humanSize(total)} in total`
+      : humanSize(total);
+    render();
+  }
+
+  // --- rows ---------------------------------------------------------------
+
+  function buildRow(item) {
+    const row = document.createElement('li');
+    row.className = 'file';
+    row.innerHTML =
+      '<div class="thumb"><span class="ext"></span></div>' +
+      '<div class="meta"><div class="name"></div><div class="sub"></div></div>' +
+      '<div class="tool"></div><div class="act"></div>' +
+      '<button type="button" class="x" title="Remove" aria-label="Remove">&times;</button>';
+    row.querySelector('.ext').textContent = badge(item.file.name);
+    row.querySelector('.x').onclick = () => {
+      release(item);
+      items = items.filter(i => i !== item);
+      render();
+      scheduleEstimate();
+    };
+    return row;
+  }
+
+  function move(item, delta) {
+    const i = items.indexOf(item), j = i + delta;
+    if (j < 0 || j >= items.length) return;
+    items.splice(j, 0, items.splice(i, 1)[0]);
+    const list = $('list');
+    items.forEach(it => it.row && list.appendChild(it.row));
+    clearResults();
+    render();
+  }
+
+  function checkSpec(item) {
+    item.specError = null;
+    const typed = (item.spec || '').trim();
+    if (!typed || item.pages === null) return;
+    // Mirrors parse_ranges, so a mistake is caught as you type rather than
+    // after a round trip.
+    const total = item.pages;
+    const dropped = new Set();
+    for (const chunk of typed.toLowerCase().split(/[,\s]+/)) {
+      if (!chunk) continue;
+      let start, end;
+      const m = /^(\d*)\s*[-–:]\s*(\d*)$/.exec(chunk);
+      if (m) {
+        start = m[1] ? +m[1] : 1;
+        end = m[2] ? +m[2] : total;
+      } else if (/^\d+$/.test(chunk)) {
+        start = end = +chunk;
+      } else {
+        item.specError = `Can't read page range “${chunk}”`;
+        return;
+      }
+      if (start < 1 || end < 1) { item.specError = 'Page numbers start at 1'; return; }
+      if (start > total || end > total) {
+        item.specError = `This PDF only has ${total} page${total > 1 ? 's' : ''}`;
+        return;
+      }
+      const [lo, hi] = start <= end ? [start, end] : [end, start];
+      for (let n = lo; n <= hi; n++) dropped.add(n);
+    }
+    if (dropped.size >= total) item.specError = 'That would remove every page';
+    item.kept = total - dropped.size;
+  }
+
+  function fillRowTool(item) {
+    const box = item.row.querySelector('.tool');
+    box.innerHTML = '';
+    if (item.status === 'unsupported' || (item.error && item.pages === null)) return;
+
+    if (current === 'merge' && items.length > 1) {
+      const arrows = document.createElement('div');
+      arrows.className = 'arrows';
+      const i = items.indexOf(item);
+      [['▲', -1, 'Move up', i === 0], ['▼', 1, 'Move down', i === items.length - 1]]
+        .forEach(([label, delta, title, off]) => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.textContent = label; b.title = title;
+          b.disabled = off || running;
+          b.onclick = () => move(item, delta);
+          arrows.appendChild(b);
+        });
+      box.appendChild(arrows);
+      return;
+    }
+
+    if (current === 'edit') {
+      const label = document.createElement('span');
+      label.className = 'drop-label';
+      label.textContent = 'drop';
+      box.appendChild(label);
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'field pages-field';
+      input.placeholder = 'e.g. 2-4';
+      input.setAttribute('aria-label', `Pages to remove from ${item.file.name}`);
+      input.value = item.spec;
+      input.disabled = running;
+      input.oninput = () => {
+        item.spec = input.value;
+        checkSpec(item);
+        input.classList.toggle('bad', Boolean(item.specError));
+        clearResults();
+        fillRow(item);
+        renderActions();
+      };
+      box.appendChild(input);
+    }
+  }
+
+  function fillRow(item) {
+    fillRowTool(item);
+    const sub = item.row.querySelector('.sub');
+    const act = item.row.querySelector('.act');
+    const name = item.row.querySelector('.name');
+    sub.className = 'sub';
+    act.innerHTML = '';
+
+    if (item.status === 'ready') {
+      name.textContent = item.file.name;
+      if (isPdfTool()) {
+        if (item.specError) {
+          sub.className = 'sub err';
+          sub.textContent = item.specError;
+        } else {
+          const pages = item.pages === null ? 'reading…'
+            : `${item.pages} page${item.pages > 1 ? 's' : ''}`;
+          const typed = (item.spec || '').trim();
+          const left = current === 'edit' && typed && item.pages !== null
+            ? ` · ${item.kept} left` : '';
+          sub.textContent = `${pages} · ${humanSize(item.file.size)}${left}`;
+        }
+        return;
+      }
+      sub.textContent = `${badge(item.file.name)} · ${humanSize(item.file.size)}`;
+      if (item.estimate) {
+        const to = document.createElement('span');
+        to.className = 'to'; to.textContent = '→';
+        const est = document.createElement('span');
+        est.className = 'est-inline'; est.textContent = humanSize(item.estimate);
+        sub.append(to, est);
+      }
+    } else if (item.status === 'working') {
+      name.textContent = item.file.name;
+      sub.textContent = 'Working…';
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      act.appendChild(spinner);
+    } else if (item.status === 'done') {
+      name.textContent = item.outName;
+      sub.textContent = '';
+      sub.append(humanSize(item.file.size));
+      const to = document.createElement('span');
+      to.className = 'to'; to.textContent = '→';
+      sub.append(to, humanSize(item.outSize));
+      if (item.note) { sub.className = 'sub warn'; sub.append(` · ${item.note}`); }
+      const dl = document.createElement('button');
+      dl.type = 'button'; dl.className = 'dl'; dl.textContent = 'Download';
+      dl.onclick = () => save(item);
+      act.appendChild(dl);
+    } else {
+      name.textContent = item.file.name;
+      sub.className = 'sub err';
+      sub.textContent = item.error;
+      if (item.status === 'error') {
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'ghost'; retry.textContent = 'Retry';
+        retry.onclick = () => { item.status = 'ready'; render(); run(); };
+        act.appendChild(retry);
+      }
+    }
+  }
+
+  function render() {
+    const list = $('list');
+    for (const item of items) {
+      if (!item.row) {
+        item.row = buildRow(item);
+        if (item.thumbUrl) showThumb(item, item.thumbUrl);
+      }
+      if (item.row.parentNode !== list) list.appendChild(item.row);
+      fillRow(item);
+    }
+    [...list.children].forEach(row => {
+      if (!items.some(i => i.row === row)) row.remove();
+    });
+
+    const done = items.filter(i => i.status === 'done').length;
+    $('files').classList.toggle('hidden', items.length === 0);
+    $('count').textContent = items.length
+      ? `${items.length} file${items.length > 1 ? 's' : ''}${done ? ` · ${done} done` : ''}`
+      : '';
+    renderActions();
+    PANELS.forEach(id => $(id).classList.toggle('locked', running));
+  }
+
+  function renderActions() {
+    const pending = items.filter(i => i.status === 'ready' || i.status === 'error').length;
+    const done = items.filter(i => i.status === 'done').length;
+    const go = $('go');
+    const blocked = blockedReason();
+    go.disabled = running || items.length === 0 || !ready();
+    go.textContent = running ? 'Working…'
+      : blocked ? blocked
+      : (current !== 'merge' && pending === 0 && done) ? 'Done'
+      : TOOLS[current].action;
+    $('downloadAll').classList.toggle('hidden', done < 2);
+  }
+
+  // --- results ------------------------------------------------------------
+
+  function clearResults() {
+    results.forEach(r => URL.revokeObjectURL(r.url));
+    results = [];
+    $('results').innerHTML = '';
+    $('resultBox').classList.add('hidden');
+  }
+
+  function showResult(blob, name) {
+    const url = URL.createObjectURL(blob);
+    results.push({ url, name });
+    const row = document.createElement('li');
+    row.className = 'file';
+    row.innerHTML =
+      '<div class="thumb"><span class="ext">PDF</span></div>' +
+      '<div class="meta"><div class="name"></div><div class="sub"></div></div>' +
+      '<div class="act"></div>';
+    row.querySelector('.name').textContent = name;
+    row.querySelector('.sub').textContent = humanSize(blob.size);
+    const dl = document.createElement('button');
+    dl.type = 'button'; dl.className = 'dl'; dl.textContent = 'Download';
+    dl.onclick = () => {
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.click();
+    };
+    row.querySelector('.act').appendChild(dl);
+    $('results').appendChild(row);
+    $('resultBox').classList.remove('hidden');
+  }
+
+  // --- doing the work -----------------------------------------------------
+
+  function invalidate() {
+    for (const item of items) {
+      if (item.status !== 'done') continue;
+      if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+      item.resultUrl = null;
+      item.outName = null;
+      item.note = null;
+      item.status = 'ready';
+      if (item.thumbUrl) showThumb(item, item.thumbUrl);
+    }
+    render();
+  }
+
+  $('go').onclick = () => run();
+
+  async function run() {
+    if (running || !ready()) return;
+    running = true;
+    const mine = ++generation;
+    clearResults();
+    render();
+    try {
+      if (current === 'merge') { await runMerge(); return; }
+      if (current === 'edit') { await runEdit(); return; }
+      for (const item of items) {
+        if (generation !== mine) return;
+        if (item.status !== 'ready' && item.status !== 'error') continue;
+        item.status = 'working';
+        fillRow(item);
+        await new Promise(r => setTimeout(r, 0));
+        await one(item);
+        fillRow(item);
+      }
+    } finally {
+      if (generation === mine) {
+        running = false;
+        render();
+      }
+    }
+  }
+
+  async function runMerge() {
+    const usable = usablePdfs();
+    try {
+      const res = await post('/pdf/build', framed(usable.map(i => i.file)),
+        { 'X-Ranges': encodeURIComponent(JSON.stringify(usable.map(() => ''))) });
+      showResult(await res.blob(), COMBINED_NAME);
+      usable.forEach(i => { i.status = 'ready'; i.note = null; });
+    } catch (err) {
+      const message = err.message || 'These PDFs could not be merged';
+      usable.forEach(i => { i.status = 'error'; i.error = message; });
+    }
+  }
+
+  async function runEdit() {
+    for (const item of items) {
+      if (item.pages === null || item.status === 'unsupported') continue;
+      const typed = (item.spec || '').trim();
+      if (!typed) continue;
+      item.status = 'working';
+      fillRow(item);
+      await new Promise(r => setTimeout(r, 0));
+      try {
+        const res = await post('/pdf/build?mode=remove', framed([item.file]),
+          { 'X-Ranges': encodeURIComponent(JSON.stringify([typed])) });
+        const blob = await res.blob();
+        if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
+        item.resultUrl = URL.createObjectURL(blob);
+        item.outName = removedName(item.file.name, typed);
+        item.outSize = blob.size;
+        item.note = `${item.pages - item.kept} removed, ${item.kept} kept`;
+        item.status = 'done';
+      } catch (err) {
+        item.status = 'error';
+        item.error = err.message || "Couldn't edit this PDF";
+      }
+      fillRow(item);
+    }
+  }
+
+  async function one(item) {
+    try {
+      const res = await post(`/convert?${convertParams(item.file)}`, item.file,
+        { 'X-Filename': encodeURIComponent(item.file.name) });
       const blob = await res.blob();
+      if (!items.includes(item)) return;
       if (item.resultUrl) URL.revokeObjectURL(item.resultUrl);
       item.resultUrl = URL.createObjectURL(blob);
       item.outName = decodeURIComponent(res.headers.get('X-Out-Name') || 'converted');
       item.outSize = blob.size;
-      item.note = res.headers.get('X-Note') ? decodeURIComponent(res.headers.get('X-Note')) : null;
+      const note = res.headers.get('X-Note');
+      item.note = note ? decodeURIComponent(note) : null;
       item.status = 'done';
-      // Show the converted image itself, so what you see is what downloads.
-      if (blob.type === 'image/jpeg') showThumb(item, item.resultUrl);
-      else if (item.previewUrl) showThumb(item, item.previewUrl);
+      if (blob.type === 'image/jpeg' || blob.type === 'image/png') showThumb(item, item.resultUrl);
+      else if (item.thumbUrl) showThumb(item, item.thumbUrl);
     } catch (err) {
       item.status = 'error';
       item.error = err.name === 'TypeError' ? "Couldn't read this file" : err.message;
@@ -612,348 +1347,41 @@
     a.click();
   }
 
-  downloadAllBtn.onclick = async () => {
+  $('downloadAll').onclick = async () => {
     for (const item of items.filter(i => i.status === 'done')) {
       save(item);
-      await new Promise(r => setTimeout(r, 250));  // browsers dislike bursts
+      await new Promise(r => setTimeout(r, 250));
     }
   };
 
   $('clear').onclick = () => {
-    items.forEach(i => {
-      if (i.previewUrl) URL.revokeObjectURL(i.previewUrl);
-      if (i.resultUrl) URL.revokeObjectURL(i.resultUrl);
-    });
+    generation++;
+    estimateRun++;
+    items.forEach(release);
     items = [];
-    list.innerHTML = '';
-    render();
-  };
-
-  syncOptions();
-
-  window.addEventListener('pagehide', () => items.forEach(i => {
-    if (i.previewUrl) URL.revokeObjectURL(i.previewUrl);
-    if (i.resultUrl) URL.revokeObjectURL(i.resultUrl);
-  }));
-})();
-</script>
-
-<script>
-// --- Edit PDF tab ---------------------------------------------------------
-(() => {
-  const $ = id => document.getElementById(id);
-  const drop = $('pdfdrop'), picker = $('pdfpicker'), list = $('pdflist');
-  const primary = $('pdfprimary'), eachBtn = $('pdfeach'), results = $('pdfresults');
-
-  let items = [];
-  let resultItems = [];
-  let busy = false;
-
-  // Decimal units, same as the Convert tab and the same as Finder. This tab
-  // used 1024-based units, so one PDF could be "1.0 MB" here and "1.1 MB" a
-  // tab away. Pinned by shared/spec/file-sizes.json.
-  const fmtSize = b => b < 1000000
-    ? Math.max(1, Math.floor(b / 1000 + 0.5)) + ' KB'
-    : (b / 1000000).toFixed(1) + ' MB';
-
-  // --- tabs --------------------------------------------------------------
-  $('tabs').addEventListener('click', e => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    [...e.currentTarget.children].forEach(b =>
-      b.setAttribute('aria-selected', String(b === btn)));
-    $('tab-convert').classList.toggle('hidden', btn.dataset.tab !== 'convert');
-    $('tab-pdf').classList.toggle('hidden', btn.dataset.tab !== 'pdf');
-  });
-
-  // --- input -------------------------------------------------------------
-  drop.addEventListener('click', () => picker.click());
-  drop.addEventListener('keydown', e => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
-  });
-  picker.addEventListener('change', () => { add([...picker.files]); picker.value = ''; });
-  ['dragenter', 'dragover'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
-  ['dragleave', 'drop'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
-
-  function add(files) {
-    files.filter(f => /\.pdf$/i.test(f.name)).forEach(file => {
-      const item = { file, pages: null, previewUrl: null, error: null };
-      item.row = buildRow(item);
-      list.appendChild(item.row);
-      items.push(item);
-      inspect(item);
-    });
-    render();
-  }
-
-  function buildRow(item) {
-    const row = document.createElement('li');
-    row.innerHTML = `
-      <div class="thumb"><span class="ext">PDF</span></div>
-      <div class="info"><div class="name"></div><div class="sub2">Reading…</div></div>
-      <input class="pages" placeholder="all" aria-label="Pages to keep" title="Leave blank for all pages, or e.g. 2-4">
-      <div class="order">
-        <button class="mini up" title="Move up">&#9650;</button>
-        <button class="mini down" title="Move down">&#9660;</button>
-      </div>
-      <button class="remove" title="Remove" aria-label="Remove">&times;</button>`;
-    row.querySelector('.name').textContent = item.file.name;
-    item.input = row.querySelector('.pages');
-    item.input.addEventListener('input', () => { validate(item); render(); });
-    row.querySelector('.up').onclick = () => move(item, -1);
-    row.querySelector('.down').onclick = () => move(item, 1);
-    row.querySelector('.remove').onclick = () => {
-      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      item.row.remove();
-      items = items.filter(i => i !== item);
-      render();
-    };
-    return row;
-  }
-
-  function move(item, delta) {
-    const i = items.indexOf(item), j = i + delta;
-    if (j < 0 || j >= items.length) return;
-    items.splice(i, 1);
-    items.splice(j, 0, item);
-    items.forEach(it => list.appendChild(it.row));   // reappend in new order
-    render();
-  }
-
-  // Page count and thumbnail, both from the server.
-  async function inspect(item) {
-    try {
-      const res = await fetch('/pdf/info', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: item.file,
-      });
-      if (res.ok) item.pages = (await res.json()).pages;
-      else item.error = await res.text();
-    } catch (_) {
-      item.error = "Couldn't read this PDF";
-    }
-    render();
-    try {
-      const res = await fetch('/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream',
-                   'X-Filename': encodeURIComponent(item.file.name) },
-        body: item.file,
-      });
-      if (res.status === 200 && items.includes(item)) {
-        item.previewUrl = URL.createObjectURL(await res.blob());
-        const thumb = item.row.querySelector('.thumb');
-        thumb.innerHTML = '';
-        const img = document.createElement('img');
-        img.src = item.previewUrl;
-        thumb.appendChild(img);
-        thumb.classList.add('clickable');
-        thumb.title = 'Open a bigger preview';
-        thumb.onclick = () => window.open(item.previewUrl, '_blank');
-      }
-    } catch (_) { /* keep the PDF badge */ }
-  }
-
-  // Mirrors the server's range parsing, purely so mistakes are caught as you type.
-  function checkSpec(spec, total) {
-    spec = (spec || '').trim().toLowerCase();
-    if (!spec || spec === 'all') return null;
-    for (const chunk of spec.split(/[,\s]+/)) {
-      if (!chunk) continue;
-      const m = chunk.match(/^(\d*)[-–:](\d*)$/);
-      let s, e;
-      if (m) { s = m[1] ? +m[1] : 1; e = m[2] ? +m[2] : (total || 1); }
-      else if (/^\d+$/.test(chunk)) { s = e = +chunk; }
-      else return `Can't read “${chunk}”`;
-      if (s < 1 || e < 1) return 'Pages start at 1';
-      if (total && (s > total || e > total)) return `Only ${total} page${total > 1 ? 's' : ''}`;
-    }
-    return null;
-  }
-
-  function validate(item) {
-    item.specError = checkSpec(item.input.value, item.pages);
-    item.input.classList.toggle('bad', !!item.specError);
-  }
-
-  function render() {
-    items.forEach(item => {
-      const sub = item.row.querySelector('.sub2');
-      validate(item);
-      if (item.error) {
-        sub.className = 'sub2 err';
-        sub.textContent = item.error;
-      } else if (item.specError) {
-        sub.className = 'sub2 err';
-        sub.textContent = item.specError;
-      } else if (item.pages != null) {
-        sub.className = 'sub2';
-        const spec = item.input.value.trim();
-        sub.textContent = `${item.pages} page${item.pages > 1 ? 's' : ''} · ${fmtSize(item.file.size)}`
-          + (spec ? ` · keeping ${spec}` : '');
-      }
-      const i = items.indexOf(item);
-      item.row.querySelector('.up').disabled = i === 0;
-      item.row.querySelector('.down').disabled = i === items.length - 1;
-      item.row.querySelector('.order').style.visibility = items.length > 1 ? '' : 'hidden';
-    });
-
-    const usable = items.filter(i => !i.error && i.pages != null);
-    const blocked = items.some(i => i.specError) || usable.length === 0;
-    $('pdflisthead').classList.toggle('hidden', items.length === 0);
-    $('pdfhint').classList.toggle('hidden', items.length === 0);
-    $('pdfactions').classList.toggle('hidden', items.length === 0);
-    $('pdfcount').textContent = items.length
-      ? `${items.length} file${items.length > 1 ? 's' : ''}` : '';
-
-    primary.disabled = busy || blocked;
-    primary.textContent = busy ? 'Working…'
-      : usable.length > 1 ? `Combine ${usable.length} PDFs into one` : 'Extract pages';
-    eachBtn.classList.toggle('hidden', usable.length < 2);
-    eachBtn.disabled = busy || blocked;
-    $('pdfreshead').classList.toggle('hidden', resultItems.length === 0);
-    $('pdfrescount').textContent = resultItems.length > 1 ? `${resultItems.length} files` : '';
-  }
-
-  // --- building ----------------------------------------------------------
-
-  function framed(files) {
-    const parts = [];
-    for (const f of files) {
-      const len = new Uint8Array(4);
-      new DataView(len.buffer).setUint32(0, f.size, false);
-      parts.push(len, f);
-    }
-    return new Blob(parts);
-  }
-
-  async function build(chosen, outName) {
-    const res = await fetch('/pdf/build', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream',
-                 'X-Ranges': encodeURIComponent(JSON.stringify(chosen.map(i => i.input.value.trim()))) },
-      body: framed(chosen.map(i => i.file)),
-    });
-    if (!res.ok) throw new Error((await res.text()) || `Error ${res.status}`);
-    return { blob: await res.blob(), name: outName };
-  }
-
-  // Mirrors naming.py, pinned by shared/spec/output-names.json: the local app
-  // and the browser build must name files identically.
-  function stemOf(filename) {
-    const base = String(filename || '').split(/[\\/]/).pop();
-    const dot = base.lastIndexOf('.');
-    const stem = (dot > 0 ? base.slice(0, dot) : base)
-      .replace(/[\x00-\x1f\x7f]/g, '')
-      .trim().replace(/^\.+|\.+$/g, '').trim();
-    return stem || 'file';
-  }
-
-  function nameFor(item) {
-    const stem = stemOf(item.file.name);
-    const spec = item.input.value.trim();
-    return spec ? `${stem}-pages-${spec.replace(/[,\s]+/g, '_')}.pdf` : `${stem}-copy.pdf`;
-  }
-
-  primary.onclick = () => {
-    const usable = items.filter(i => !i.error && i.pages != null);
-    if (usable.length > 1) run([[usable, 'combined.pdf']]);
-    else run([[usable, nameFor(usable[0])]]);
-  };
-
-  eachBtn.onclick = () => {
-    const usable = items.filter(i => !i.error && i.pages != null);
-    run(usable.map(i => [[i], nameFor(i)]));
-  };
-
-  async function run(jobs) {
-    if (busy) return;
-    busy = true;
-    clearResults();
-    render();
-    const made = [];
-    for (const [chosen, name] of jobs) {
-      try {
-        made.push(await build(chosen, name));
-      } catch (err) {
-        showError(name, err.message);
-      }
-    }
-    busy = false;
-    made.forEach(showResult);
-    render();
-  }
-
-  function clearResults() {
-    resultItems.forEach(r => URL.revokeObjectURL(r.url));
-    resultItems = [];
-    results.innerHTML = '';
-  }
-
-  function showError(name, message) {
-    const row = document.createElement('li');
-    row.innerHTML = `<div class="thumb"><span class="ext">PDF</span></div>
-      <div class="info"><div class="name"></div><div class="sub2 err"></div></div>`;
-    row.querySelector('.name').textContent = name;
-    row.querySelector('.sub2').textContent = message;
-    results.appendChild(row);
-  }
-
-  function showResult(made) {
-    const url = URL.createObjectURL(made.blob);
-    resultItems.push({ url, name: made.name });
-    const row = document.createElement('li');
-    row.innerHTML = `<div class="thumb"><span class="ext">PDF</span></div>
-      <div class="info"><div class="name"></div><div class="sub2"></div></div>
-      <div class="act"></div>`;
-    row.querySelector('.name').textContent = made.name;
-    row.querySelector('.sub2').textContent = fmtSize(made.blob.size);
-    const dl = document.createElement('button');
-    dl.className = 'dl';
-    dl.textContent = 'Download';
-    dl.onclick = () => {
-      const a = document.createElement('a');
-      a.href = url; a.download = made.name; a.click();
-    };
-    row.querySelector('.act').appendChild(dl);
-    results.appendChild(row);
-
-    // Show the first page of what was built, so it can be checked before saving.
-    fetch('/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': 'result.pdf' },
-      body: made.blob,
-    }).then(async res => {
-      if (res.status !== 200) return;
-      const thumbUrl = URL.createObjectURL(await res.blob());
-      resultItems.push({ url: thumbUrl, name: 'thumb' });
-      const thumb = row.querySelector('.thumb');
-      thumb.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = thumbUrl;
-      thumb.appendChild(img);
-      thumb.classList.add('clickable');
-      thumb.title = 'Open a bigger preview';
-      thumb.onclick = () => window.open(url, '_blank');
-    }).catch(() => {});
-  }
-
-  $('pdfclear').onclick = () => {
-    items.forEach(i => i.previewUrl && URL.revokeObjectURL(i.previewUrl));
-    items = [];
-    list.innerHTML = '';
+    $('list').innerHTML = '';
+    $('qest').classList.add('hidden');
     clearResults();
     render();
   };
 
-  window.addEventListener('pagehide', () => {
-    items.forEach(i => i.previewUrl && URL.revokeObjectURL(i.previewUrl));
-    clearResults();
-  });
+  // --- the privacy badge explains itself ----------------------------------
+
+  const promise = $('promise'), pop = $('promisePop');
+  const setPop = open => {
+    pop.hidden = !open;
+    promise.setAttribute('aria-expanded', String(open));
+  };
+  promise.addEventListener('click', e => { e.stopPropagation(); setPop(pop.hidden); });
+  promise.addEventListener('mouseenter', () => setPop(true));
+  pop.addEventListener('mouseleave', () => setPop(false));
+  document.addEventListener('click', e => { if (!e.target.closest('.promise-wrap')) setPop(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setPop(false); });
+
+  syncFormat();
+  showTool(location.hash.slice(1) || 'convert');
+
+  window.addEventListener('pagehide', () => { items.forEach(release); clearResults(); });
 })();
 </script>
 </body>

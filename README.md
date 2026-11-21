@@ -26,10 +26,10 @@ Both are in this repository and must behave identically: the same page ranges,
 the same filenames, the same sizes. Those rules are pinned in
 [`shared/spec/`](shared/spec/) and both test suites run against them.
 
-The macOS app is the complete one. The browser build does pictures — which is
-most of the daily use — on a phone as well as a Mac, and needs nothing
-installed: **<https://techbydisha.github.io/convertly/>**. Its source is in
-[`web/`](web/).
+They now look the same, too: one interface, five tools — Convert, Compress,
+Resize, Merge, Edit. The macOS app is the complete one; the browser build
+needs nothing installed and works on a phone:
+**<https://techbydisha.github.io/convertly/>**. Its source is in [`web/`](web/).
 
 ---
 

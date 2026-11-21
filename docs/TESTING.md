@@ -215,25 +215,15 @@ Before a release, run `python3 run.py` and confirm:
 - [ ] Combining two PDFs respects the ▲▼ order
 - [ ] The browser console is free of errors
 
-### The browser build
+### Only in the browser build
 
-Serve it with `python3 -m http.server -d web 8000` and confirm:
-
-- [ ] A HEIC converts to JPG, and the thumbnail shows the picture rather than a badge
-- [ ] A Word file, a `.zip` and a `.tiff` each get a row saying *why* they are refused
-- [ ] **Max file size** of 200 KB on a large photo lands under it, and the row says what changed
-- [ ] A picture smaller than the **Resize** setting is left alone, with no note claiming a resize
-- [ ] **Resize** set larger than the picture, *together with* a size limit, gives exactly the
-      same result as no resize at all — same bytes, same dimensions
+- [ ] A Word file, a `.zip` and a `.tiff` each get a row saying *why* they are
+      refused — the macOS app takes all three
 - [ ] A `.pages` file converts to PDF, and to JPG is refused with an explanation
-- [ ] **Merge**: two PDFs join in list order, and the ▲▼ arrows change that order
-- [ ] **Edit**: typing `2-3` on a 5-page PDF leaves pages 1, 4 and 5, named `…-without-2-3.pdf`
-- [ ] **Edit**: a range past the end, or one covering every page, disables the button and says why
-- [ ] Choosing **PNG** dims the quality slider and shows `n/a`, not `auto`
-- [ ] A transparent PNG stays transparent as PNG, and flattens to **white** (not black) as JPG
-- [ ] Changing the format clears previous results and removes the Download buttons
+- [ ] A transparent PNG stays transparent as PNG, and flattens to **white**
+      (not black) as JPG
 - [ ] At phone width every label stays beside the control it names
-- [ ] The console is free of errors, and the network panel shows nothing beyond the page's own files
+- [ ] The network panel shows nothing beyond the page's own files
 
 The last one is the important one. The privacy claim is `connect-src 'none'`,
 and it is worth re-proving rather than assuming:

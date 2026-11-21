@@ -143,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
         elif parsed.path == "/pdf/info":
             self.do_pdf_info()
         elif parsed.path == "/pdf/build":
-            self.do_pdf_build()
+            self.do_pdf_build(urllib.parse.parse_qs(parsed.query))
         else:
             self._send(404, b"Not found")
 
@@ -176,11 +176,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send(200, json.dumps({"pages": pages}).encode(), "application/json")
 
-    def do_pdf_build(self):
+    def do_pdf_build(self, query=None):
         """Build one PDF from page ranges of the uploaded PDFs, in order.
 
         The body is each file prefixed by its 4-byte big-endian length, which
         keeps several files in one request without needing a multipart parser.
+
+        `mode=remove` reads each range as the pages to take *out* rather than
+        the pages to keep, which is what the Edit tab asks for.
         """
         body = self._read_body()
         if body is None:
@@ -205,8 +208,14 @@ class Handler(BaseHTTPRequestHandler):
         if len(ranges) != len(parts):
             ranges = [""] * len(parts)
 
+        mode = ((query or {}).get("mode", ["keep"])[0] or "keep").lower()
+        if mode not in ("keep", "remove"):
+            self._send(400, b"Unknown mode")
+            return
+        make = pdfedit.build_without if mode == "remove" else pdfedit.build
+
         try:
-            result = pdfedit.build(list(zip(parts, ranges)))
+            result = make(list(zip(parts, ranges)))
         except pdfedit.PdfError as exc:
             self._send(422, str(exc).encode("utf-8"))
             return
