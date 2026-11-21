@@ -1,8 +1,8 @@
 # Convertly
 
 A local file converter and PDF editor for macOS. Convert images and documents to
-**JPG**, **JPEG**, **PNG** or **PDF**, resize pictures to fit a size limit, pull pages out
-of a PDF, and join PDFs together.
+**JPG**, **JPEG**, **PNG** or **PDF**, resize pictures to fit a size limit, make
+a PDF smaller, take pages out of one, and join PDFs together.
 
 Everything runs on your own device. Nothing is uploaded, nothing is stored, and
 there is nothing to install.
@@ -17,6 +17,7 @@ there is nothing to install.
 | Resize, and fit under a size limit | yes | yes |
 | Pages, Keynote, Numbers | yes | yes, to PDF |
 | Merge PDFs, remove pages | yes | yes |
+| Compress a PDF | yes | yes |
 | PDF pages as images | first page | not yet |
 | TIFF | yes | not yet |
 | Word documents | yes | no — `qlmanage` has no browser equivalent |

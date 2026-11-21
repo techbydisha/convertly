@@ -200,20 +200,39 @@ is honest rather than red on other platforms.
 
 ## Manual checks
 
-The browser UI is not automated — a real drag-and-drop, a real file picker and a
-real download cannot be faked convincingly enough to be worth the machinery.
-Before a release, run `python3 run.py` and confirm:
+Both builds now run the same interface, so they get the same checklist. Run
+`python3 run.py` for the macOS app and `python3 -m http.server -d web 8000` for
+the browser build, and confirm in each:
 
-- [ ] Dragging a mixed selection (HEIC, PNG, PDF, Word) lists every file with a thumbnail
-- [ ] Nothing converts until **Convert** is pressed
-- [ ] Changing format or quality clears results and waits for another press
+- [ ] Dragging a mixed selection lists every file with a thumbnail
+- [ ] Nothing happens until the green button is pressed
+- [ ] Changing a setting clears earlier results and waits for another press
 - [ ] Downloaded files open correctly and match their preview
-- [ ] **Max file size** of 1 MB on a large photo produces a file under 1 MB, and the row explains what changed
-- [ ] Setting a size limit shows `auto` beside the quality slider and dims it
-- [ ] Choosing **PNG** shows `n/a` beside the quality slider; a PNG photo may be larger than its source, which is correct
-- [ ] **Edit PDF**: page count is right, `2-4` produces exactly those pages, an invalid range blocks the button
-- [ ] Combining two PDFs respects the ▲▼ order
-- [ ] The browser console is free of errors
+- [ ] **Convert**: the size beside the quality slider tracks the slider, and
+      matches the row after converting
+- [ ] Choosing **PNG** shows `n/a` beside the quality slider; a PNG photo may
+      be larger than its source, which is correct
+- [ ] **Compress** a photo to 1 MB: it lands under, and the row says what it did
+- [ ] **Compress** a photo PDF to 200 KB: it lands under, and the row says how
+      many images were re-encoded
+- [ ] **Compress** a text-only PDF: refused with *not photographs*, rather than
+      handing back the same file and calling it compressed
+- [ ] **Resize** larger than the picture leaves it alone, with no note claiming
+      a resize
+- [ ] **Merge**: two PDFs join in list order, and ▲▼ changes that order
+- [ ] **Edit**: the word `drop` sits before the box; `2-3` on a 4-page PDF
+      leaves pages 1 and 4
+- [ ] **Edit**: a range past the end, or one covering every page, disables the
+      button and says why
+- [ ] After any PDF job, clicking the row's badge opens the finished file
+- [ ] The console is free of errors
+
+Two things differ by design. The size readout is measured by whichever encoder
+will actually run — the canvas in the browser, `sips` through the server on the
+Mac — because an estimate from a different encoder than the one that produces
+the file is worse than no estimate. And a finished PDF gets a picture of its
+first page only on the Mac, which has Quick Look; the browser build has no
+renderer vendored yet, so its badge opens the file instead of previewing it.
 
 ### Only in the browser build
 

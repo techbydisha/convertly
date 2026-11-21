@@ -611,11 +611,11 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
     },
     compress: {
       title: 'Compress',
-      blurb: 'Get a picture under a size limit — for the upload that only allows 1 MB.',
-      types: IMAGE_TYPES,
+      blurb: 'Get a picture or a PDF under a size limit — for the upload that only allows 1 MB.',
+      types: IMAGE_TYPES + ' · PDF',
       panel: 'opt-compress',
       action: 'Compress',
-      accept: /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp)$/i,
+      accept: /\.(heic|heif|png|jpe?g|tiff?|gif|bmp|webp|pdf)$/i,
     },
     resize: {
       title: 'Resize',
@@ -722,7 +722,9 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
   function convertParams(file) {
     const p = new URLSearchParams();
     if (current === 'compress') {
-      p.set('format', 'jpg');
+      // A PDF stays a PDF -- its photographs are re-encoded in place. Turning
+      // one into a JPG would not be compressing it, it would be losing it.
+      p.set('format', /\.pdf$/i.test(file.name) ? 'pdf' : 'jpg');
       p.set('quality', '95');
       p.set('target', String(targetBytes()));
     } else if (current === 'resize') {
@@ -934,6 +936,27 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
       preparing = false;
       scheduleEstimate();
     }
+  }
+
+  // The macOS app has Quick Look, so a finished PDF gets a real picture of its
+  // first page rather than a badge -- you see what you are about to keep.
+  const previewUrls = [];
+  async function previewResult(thumb, blob, openUrl) {
+    if (!thumb) return;
+    try {
+      const res = await post('/preview', blob, { 'X-Filename': 'result.pdf' });
+      if (res.status === 200) {
+        const url = URL.createObjectURL(await res.blob());
+        previewUrls.push(url);
+        thumb.innerHTML = '';
+        const img = document.createElement('img');
+        img.src = url; img.alt = '';
+        thumb.appendChild(img);
+      }
+    } catch (_) { /* the badge stays; it is still openable */ }
+    thumb.classList.add('clickable');
+    thumb.title = 'Open the finished PDF';
+    thumb.onclick = () => window.open(openUrl, '_blank');
   }
 
   function showThumb(item, url) {
@@ -1210,6 +1233,7 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
 
   function clearResults() {
     results.forEach(r => URL.revokeObjectURL(r.url));
+    previewUrls.splice(0).forEach(URL.revokeObjectURL);
     results = [];
     $('results').innerHTML = '';
     $('resultBox').classList.add('hidden');
@@ -1235,6 +1259,7 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
     row.querySelector('.act').appendChild(dl);
     $('results').appendChild(row);
     $('resultBox').classList.remove('hidden');
+    previewResult(row.querySelector('.thumb'), blob, url);
   }
 
   // --- doing the work -----------------------------------------------------
@@ -1311,6 +1336,8 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
         item.outSize = blob.size;
         item.note = `${item.pages - item.kept} removed, ${item.kept} kept`;
         item.status = 'done';
+        fillRow(item);
+        previewResult(item.row.querySelector('.thumb'), blob, item.resultUrl);
       } catch (err) {
         item.status = 'error';
         item.error = err.message || "Couldn't edit this PDF";
@@ -1334,6 +1361,10 @@ footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
       item.status = 'done';
       if (blob.type === 'image/jpeg' || blob.type === 'image/png') showThumb(item, item.resultUrl);
       else if (item.thumbUrl) showThumb(item, item.thumbUrl);
+      if (blob.type === 'application/pdf') {
+        fillRow(item);
+        previewResult(item.row.querySelector('.thumb'), blob, item.resultUrl);
+      }
     } catch (err) {
       item.status = 'error';
       item.error = err.name === 'TypeError' ? "Couldn't read this file" : err.message;

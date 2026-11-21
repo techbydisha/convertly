@@ -208,6 +208,59 @@ class RemovingPages(unittest.TestCase):
         self.assertEqual(page_texts(made), list(FIVE))
 
 
+class CompressingPdfs(unittest.TestCase):
+    """Re-encoding the photographs inside a PDF, leaving everything else."""
+
+    @staticmethod
+    def shrink(jpeg, quality, max_px):
+        """A stand-in encoder: returns something smaller, with new dimensions."""
+        return (b"\xff\xd8" + b"s" * max(1, len(jpeg) // 4), 60, 40)
+
+    def photo_pdf(self):
+        from convertly import convert as conv
+        jpeg = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+                b"\xff\xc0\x00\x11\x08\x01,\x01\x90\x03\x01\x11\x00\x02\x11\x01\x03\x11\x01"
+                + b"\x00" * 4000 + b"\xff\xd9")
+        return conv.jpeg_to_pdf(jpeg), jpeg
+
+    def test_finds_the_jpeg_on_a_page(self):
+        pdf, jpeg = self.photo_pdf()
+        doc = pdfedit.PDF(pdf)
+        found = pdfedit.jpeg_images(doc, doc.pages())
+        self.assertEqual(len(found), 1)
+        self.assertEqual(bytes(list(found.values())[0].raw), jpeg)
+
+    def test_a_text_pdf_has_nothing_to_compress(self):
+        doc = pdfedit.PDF(make_pdf(FIVE))
+        self.assertEqual(pdfedit.jpeg_images(doc, doc.pages()), {})
+
+    def test_swaps_the_image_and_updates_its_dimensions(self):
+        pdf, jpeg = self.photo_pdf()
+        made, changed = pdfedit.compress(pdf, self.shrink, 50, None)
+        self.assertEqual(changed, 1)
+        self.assertLess(len(made), len(pdf))
+        doc = pdfedit.PDF(made)
+        images = list(pdfedit.jpeg_images(doc, doc.pages()).values())
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].dict.get("Width"), 60)
+        self.assertEqual(images[0].dict.get("Height"), 40)
+        self.assertLess(len(images[0].raw), len(jpeg))
+
+    def test_an_encoder_that_grows_the_image_is_ignored(self):
+        """A bigger image is not a compression, so it must not be swapped in."""
+        pdf, jpeg = self.photo_pdf()
+        made, changed = pdfedit.compress(pdf, lambda j, q, m: (j + b"x" * 5000, 9, 9), 50, None)
+        self.assertEqual(changed, 0)
+        doc = pdfedit.PDF(made)
+        kept = list(pdfedit.jpeg_images(doc, doc.pages()).values())[0]
+        self.assertEqual(bytes(kept.raw), jpeg)
+
+    def test_the_document_still_reads_back(self):
+        pdf, _ = self.photo_pdf()
+        made, _ = pdfedit.compress(pdf, self.shrink, 50, None)
+        self.assertEqual(pdfedit.page_count(made), 1)
+
+
 class Serialisation(unittest.TestCase):
     def test_names_with_specials_are_escaped(self):
         self.assertEqual(pdfedit.serialize(pdfedit.Name("A B")), b"/A#20B")

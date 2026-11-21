@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 from convertly import convert as conv
+from convertly import pdfedit
 
 from .helpers import (
     make_docx,
@@ -345,3 +346,69 @@ class SizeBudget(unittest.TestCase):
         """Finder and upload limits both mean 1 MB = 1,000,000 bytes."""
         self.assertEqual(conv._human_size(1_000_000), "1.0 MB")
         self.assertEqual(conv._human_size(500_000), "500 KB")
+
+
+@requires_sips
+class CompressingPdfs(unittest.TestCase):
+    """Making a PDF smaller by re-encoding the photographs inside it."""
+
+    def photo_pdf(self, width=1200, height=900):
+        jpeg, _, _ = conv.convert(make_noisy_image("png", width, height),
+                                  "p.png", "jpg", quality=95)
+        return conv.jpeg_to_pdf(jpeg)
+
+    def test_recompress_jpeg_returns_smaller_bytes_and_new_size(self):
+        jpeg, _, _ = conv.convert(make_noisy_image("png", 800, 600), "p.png", "jpg", quality=95)
+        made = conv.recompress_jpeg(jpeg, 40, 400)
+        self.assertIsNotNone(made)
+        data, width, height = made
+        self.assertLess(len(data), len(jpeg))
+        self.assertEqual(max(width, height), 400)
+
+    def test_recompress_jpeg_never_enlarges(self):
+        jpeg, _, _ = conv.convert(make_image("png", 200, 150), "p.png", "jpg", quality=90)
+        _, width, height = conv.recompress_jpeg(jpeg, 90, 4000)
+        self.assertEqual((width, height), (200, 150))
+
+    def test_meets_a_size_limit(self):
+        pdf = self.photo_pdf()
+        for target in (400_000, 120_000, 30_000):
+            with self.subTest(target=target):
+                made, note = conv.fit_pdf(pdf, target_bytes=target, quality=95)
+                self.assertLessEqual(len(made), target)
+                self.assertIn("re-encoded", note)
+
+    def test_the_result_is_still_a_readable_pdf(self):
+        made, _ = conv.fit_pdf(self.photo_pdf(), target_bytes=200_000, quality=95)
+        self.assertTrue(made.startswith(b"%PDF"))
+        self.assertEqual(pdfedit.page_count(made), 1)
+
+    def test_a_text_pdf_says_there_is_nothing_to_compress(self):
+        with self.assertRaises(conv.ConversionError) as caught:
+            conv.fit_pdf(make_pdf(("One", "Two")), target_bytes=500)
+        self.assertIn("not photographs", str(caught.exception))
+
+    def test_no_target_at_a_quality_that_cannot_shrink_says_so(self):
+        """The first attempt failing is not the same as nothing being there."""
+        pdf = self.photo_pdf()
+        with self.assertRaises(conv.ConversionError) as caught:
+            conv.fit_pdf(pdf, quality=100)
+        self.assertIn("size limit", str(caught.exception))
+
+    def test_an_impossible_limit_hands_back_the_smallest_it_managed(self):
+        made, note = conv.fit_pdf(self.photo_pdf(), target_bytes=900, quality=95)
+        self.assertIn("Could not reach", note)
+        self.assertTrue(made.startswith(b"%PDF"))
+
+    def test_convert_routes_a_pdf_with_a_target_to_compression(self):
+        pdf = self.photo_pdf()
+        made, ext, note = conv.convert(pdf, "Scan.pdf", "pdf", quality=95, target_bytes=250_000)
+        self.assertEqual(ext, "pdf")
+        self.assertLessEqual(len(made), 250_000)
+        self.assertIn("re-encoded", note)
+
+    def test_convert_without_a_target_still_copies_unchanged(self):
+        pdf = self.photo_pdf()
+        made, _, note = conv.convert(pdf, "Scan.pdf", "pdf")
+        self.assertEqual(made, pdf)
+        self.assertIn("Already a PDF", note)

@@ -763,6 +763,9 @@ class Builder:
         self.bodies = {}
         self.next = 3
         self.page_objects = []
+        # key -> (raw, width, height): images to swap as they are copied, which
+        # is how a PDF is made smaller without rewriting anything else.
+        self.replace = {}
 
     def _alloc(self):
         num = self.next
@@ -809,6 +812,17 @@ class Builder:
             probe = target.dict if isinstance(target, Stream) else target
             if isinstance(probe, dict) and str(probe.get("Type")) == "Page" and key not in selected:
                 return None
+            if isinstance(target, Stream) and key in self.replace:
+                raw, width, height = self.replace[key]
+                num = self._alloc()
+                memo[key] = num
+                body = {k: self._copy(doc, v, memo, selected, depth + 1)
+                        for k, v in target.dict.items() if k != "Length"}
+                # The page scales the image into a box, so new pixel dimensions
+                # are safe -- only /Width and /Height describe them.
+                body["Width"], body["Height"] = width, height
+                self.bodies[num] = Stream(body, raw)
+                return Ref(num, 0)
             num = self._alloc()
             memo[key] = num
             self.bodies[num] = self._copy(doc, target, memo, selected, depth + 1)
@@ -881,6 +895,75 @@ def parse_ranges(spec: str, total: int):
     if not out:
         raise PdfError("No pages selected")
     return out
+
+
+def jpeg_images(doc: PDF, pages):
+    """Every re-encodable image these pages use, as {ref key: Stream}.
+
+    Only DCTDecode -- a JPEG, which can be decoded and encoded again. Anything
+    else (a PNG-style Flate bitmap, a mask, a JPEG 2000) is left exactly as it
+    is rather than guessed at, which is why compressing a PDF of scans helps
+    and compressing a PDF of text does nothing.
+    """
+    found = {}
+    seen = set()
+
+    def walk(resources, depth=0):
+        if depth > 8 or not isinstance(resources, dict):
+            return
+        xobjects = doc.resolve(resources.get("XObject"))
+        if not isinstance(xobjects, dict):
+            return
+        for value in xobjects.values():
+            if not isinstance(value, Ref):
+                continue
+            key = value.key()
+            if key in seen:
+                continue
+            seen.add(key)
+            stream = doc.resolve(value)
+            if not isinstance(stream, Stream):
+                continue
+            subtype = str(doc.resolve(stream.dict.get("Subtype")))
+            if subtype == "Form":
+                walk(doc.resolve(stream.dict.get("Resources")), depth + 1)
+                continue
+            if subtype != "Image":
+                continue
+            filters = doc.resolve(stream.dict.get("Filter"))
+            names = [str(doc.resolve(f)) for f in
+                     (filters if isinstance(filters, list) else [filters])]
+            if names == ["DCTDecode"]:
+                found[key] = stream
+
+    for page in pages:
+        merged = dict(page["obj"])
+        for k, v in page["inherited"].items():
+            merged.setdefault(k, v)
+        walk(doc.resolve(merged.get("Resources")))
+    return found
+
+
+def compress(data: bytes, encoder, quality: int = 60, max_px=None):
+    """Rewrite a PDF with its photographs re-encoded smaller.
+
+    `encoder(jpeg, quality, max_px)` returns (bytes, width, height) or None.
+    It is injected so this module stays free of any image library: the macOS
+    app hands in one built on sips, the browser one built on a canvas.
+
+    Returns (pdf_bytes, images_changed).
+    """
+    doc = PDF(data)
+    pages = doc.pages()
+    replace = {}
+    for key, stream in jpeg_images(doc, pages).items():
+        made = encoder(stream.raw, quality, max_px)
+        if made and len(made[0]) < len(stream.raw):
+            replace[key] = made
+    builder = Builder()
+    builder.replace = replace
+    builder.add(doc, list(range(1, len(pages) + 1)))
+    return builder.build(), len(replace)
 
 
 def invert_ranges(spec: str, total: int):

@@ -23,6 +23,8 @@ import tempfile
 import zipfile
 import zlib
 
+from . import pdfedit
+
 # --- what we accept -------------------------------------------------------
 
 IMAGE_EXTS = ("heic", "heif", "png", "jpg", "jpeg", "tif", "tiff", "gif", "bmp", "webp")
@@ -329,6 +331,109 @@ def _render_page1(src: str, tmpdir: str, quality: int, size: int = RENDER_PX,
     return _fit_jpeg(png_path, tmpdir, quality, max_px, target_bytes)
 
 
+def recompress_jpeg(jpeg: bytes, quality: int, max_px: int | None):
+    """Re-encode a JPEG smaller. Returns (bytes, width, height), or None.
+
+    The encoder `pdfedit.compress` is given: it keeps that module free of any
+    image library, and keeps this one unaware of PDF structure.
+    """
+    try:
+        width, height = _jpeg_size(jpeg)[:2]
+    except ConversionError:
+        return None
+    limit = min(max_px, max(width, height)) if max_px else None
+    with _workspace(jpeg, "image.jpg") as (tmpdir, src):
+        dst = os.path.join(tmpdir, "smaller.jpg")
+        if not _to_jpeg(src, dst, quality, limit):
+            return None
+        with open(dst, "rb") as fh:
+            data = fh.read()
+    try:
+        new_w, new_h, _ = _jpeg_size(data)
+    except ConversionError:
+        return None
+    return data, new_w, new_h
+
+
+def fit_pdf(data: bytes, target_bytes: int | None = None, quality: int = 60,
+            max_px: int | None = None):
+    """Make a PDF smaller by re-encoding the photographs inside it.
+
+    Returns (pdf_bytes, note). Mirrors _fit_jpeg: quality is lowered first, and
+    only when that is not enough are the pictures made smaller. Each attempt
+    rebuilds the whole document, so the search is bounded the same way.
+    """
+    doc = pdfedit.PDF(data)
+    images = pdfedit.jpeg_images(doc, doc.pages())
+    if not images:
+        raise ConversionError(
+            "Nothing in this PDF can be compressed -- its size is text and "
+            "layout, not photographs")
+
+    # Where the shrink loop starts. Using an arbitrary number here would spend
+    # the attempt budget capping images at sizes larger than they already are.
+    longest = 0
+    for stream in images.values():
+        try:
+            w, h, _ = _jpeg_size(stream.raw)
+        except ConversionError:
+            continue
+        longest = max(longest, w, h)
+
+    def describe(changed, q, px):
+        if not changed:
+            return "Already as small as re-encoding can make it"
+        parts = [f"{changed} image{'s' if changed > 1 else ''} re-encoded"]
+        if px:
+            parts.append(f"capped at {px}px")
+        parts.append(f"quality {q}")
+        return ", ".join(parts)
+
+    first, changed = pdfedit.compress(data, recompress_jpeg, quality, max_px)
+    if not target_bytes:
+        if not changed:
+            # Re-encoding at this quality made every image larger, so nothing
+            # was swapped. Saying "nothing can be compressed" here would be
+            # wrong -- a lower quality would shrink it.
+            raise ConversionError(
+                "This PDF is already as small as re-encoding at this quality "
+                "can make it -- set a size limit to compress it further")
+        return first, describe(changed, quality, max_px)
+    if len(first) <= target_bytes:
+        return first, describe(changed, quality, max_px)
+
+    attempts = [(len(first), first, quality, max_px, changed)]
+    px = max_px
+    while len(attempts) < MAX_FIT_ATTEMPTS:
+        low, high, best = MIN_QUALITY, quality, None
+        while low <= high and len(attempts) < MAX_FIT_ATTEMPTS:
+            mid = (low + high) // 2
+            made, hit = pdfedit.compress(data, recompress_jpeg, mid, px)
+            attempts.append((len(made), made, mid, px, hit))
+            if len(made) <= target_bytes:
+                best = (made, mid, hit)
+                low = mid + 1
+            else:
+                high = mid - 1
+        if best:
+            made, used, hit = best
+            return made, describe(hit, used, px)
+        at_floor = [a[0] for a in attempts if a[2] == MIN_QUALITY]
+        floor_size = min(at_floor) if at_floor else len(first)
+        scale = math.sqrt(target_bytes / floor_size) * 0.92
+        base = px if px else longest
+        if not base:
+            break                       # no readable image: nothing to shrink
+        next_px = max(MIN_EDGE_PX, int(base * min(scale, 0.9)))
+        if px is not None and next_px >= px:
+            break
+        px = next_px
+
+    smallest = min(attempts, key=lambda a: a[0])
+    return smallest[1], (f"Could not reach the size limit -- smallest is "
+                         f"{_human_size(smallest[0])}")
+
+
 def _pdf_page_count(data: bytes) -> int | None:
     """Best-effort page count. Returns None when it can't tell."""
     pattern = re.compile(rb"/Type\s*/Page[^s]")
@@ -470,6 +575,9 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85,
 
         if what == "pdf":
             if out_format == "pdf":
+                if target_bytes or max_px:
+                    made, note = fit_pdf(data, target_bytes, quality, max_px)
+                    return made, ext, note
                 return data, ext, "Already a PDF -- copied unchanged"
             pages = _pdf_page_count(data)
             note = f"First page only ({pages} pages in the PDF)" if pages and pages > 1 else None

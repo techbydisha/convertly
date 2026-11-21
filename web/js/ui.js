@@ -29,8 +29,8 @@ const TOOLS = {
   },
   compress: {
     title: 'Compress',
-    blurb: 'Get a picture under a size limit — for the upload that only allows 1 MB.',
-    types: IMAGE_TYPES,
+    blurb: 'Get a picture or a PDF under a size limit — for the upload that only allows 1 MB.',
+    types: IMAGE_TYPES + ' · PDF',
     panel: 'opt-compress',
     action: 'Compress',
   },
@@ -139,7 +139,10 @@ function maxPx() {
  */
 function settingsFor(file) {
   if (current === 'compress') {
-    return { format: 'jpg', quality: 95, maxPx: null, targetBytes: targetBytes() };
+    // A PDF stays a PDF -- its photographs are re-encoded in place. Turning
+    // one into a JPG would not be compressing it, it would be losing it.
+    const pdf = kindOf(file.name) === 'pdf';
+    return { format: pdf ? 'pdf' : 'jpg', quality: 95, maxPx: null, targetBytes: targetBytes() };
   }
   if (current === 'resize') {
     return {
@@ -209,6 +212,10 @@ function showResult(blob, name) {
     <div class="act"></div>`;
   row.querySelector('.name').textContent = name;
   row.querySelector('.sub').textContent = humanSize(blob.size);
+  const thumb = row.querySelector('.thumb');
+  thumb.classList.add('clickable');
+  thumb.title = 'Open the finished PDF';
+  thumb.onclick = () => window.open(url, '_blank');
   const dl = document.createElement('button');
   dl.type = 'button'; dl.className = 'dl'; dl.textContent = 'Download';
   dl.onclick = () => {
@@ -338,6 +345,21 @@ function withinBudget(bitmap) {
   if (kept.length >= FILE_BUDGET) return false;
   const used = kept.reduce((n, i) => n + i.bitmap.width * i.bitmap.height, 0);
   return used + bitmap.width * bitmap.height <= PIXEL_BUDGET;
+}
+
+/**
+ * Make a row's badge open something, even when there is no picture to show.
+ *
+ * A PDF has no thumbnail in this build -- rendering a page needs a renderer
+ * we have not vendored yet -- but it can still be opened, which is the part
+ * that matters: you see the actual result before you keep it.
+ */
+function makeOpenable(item, url, title) {
+  const thumb = item.row?.querySelector('.thumb');
+  if (!thumb || !url) return;
+  thumb.classList.add('clickable');
+  thumb.title = title;
+  thumb.onclick = () => window.open(url, '_blank');
 }
 
 function showThumb(item, url) {
@@ -750,6 +772,8 @@ async function runEdit() {
       item.outSize = blob.size;
       item.note = `${item.pages - kept.length} removed, ${kept.length} kept`;
       item.status = 'done';
+      fillRow(item);
+      makeOpenable(item, item.resultUrl, 'Open the finished PDF');
     } catch (err) {
       item.status = 'error';
       item.error = err instanceof PdfError ? err.message : "Couldn't edit this PDF";
@@ -771,6 +795,10 @@ async function one(item) {
     // Show the result itself, so what you see is what downloads.
     if (blob.type === 'image/jpeg' || blob.type === 'image/png') showThumb(item, item.resultUrl);
     else if (item.thumbUrl) showThumb(item, item.thumbUrl);
+    if (blob.type === 'application/pdf') {
+      fillRow(item);
+      makeOpenable(item, item.resultUrl, 'Open the finished PDF');
+    }
   } catch (err) {
     item.status = 'error';
     item.error = err?.message || "Couldn't read this file";

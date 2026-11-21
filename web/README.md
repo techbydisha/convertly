@@ -18,9 +18,10 @@ transparency survives — converting the same file to JPG flattens it onto white
 instead. A size limit still applies, but with nothing to trade away the only
 way under it is a smaller picture, which the row reports.
 
-**PDFs work.** Merging documents in an order you choose, and removing pages
-from one. The engine is a port of `pdfedit.py`, and its output is checked
-byte-for-byte against the original.
+**PDFs work.** Merging documents in an order you choose, removing pages from
+one, and compressing one by re-encoding the photographs inside it. The engine
+is a port of `pdfedit.py`, and its output is checked byte-for-byte against the
+original.
 
 **Not yet:** turning a PDF into images, and TIFF. Word documents are not
 coming — Quick Look has no browser equivalent.

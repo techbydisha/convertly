@@ -11,6 +11,7 @@ import { decodeImage } from './decode.js';
 import { fitJpeg, fitPng, budgetFor } from './fit.js';
 import { jpegToPdf } from './pdfwrite.js';
 import { iworkPreview } from './unzip.js';
+import { fitPdf } from './pdfcompress.js';
 
 export class ConversionError extends Error {}
 
@@ -66,6 +67,11 @@ export async function convertFile(file, { format, quality = 85, maxPx = null, ta
 
   if (kind === 'pdf') {
     if (format === 'pdf') {
+      if (targetBytes || maxPx) {
+        const made = await fitPdf(new Uint8Array(await file.arrayBuffer()),
+          { targetBytes, quality, maxPx });
+        return { blob: new Blob([made.bytes], { type: MIME.pdf }), name, note: made.note };
+      }
       return { blob: file.slice(0, file.size, MIME.pdf), name, note: 'Already a PDF -- copied unchanged' };
     }
     // Rasterising a PDF page needs a PDF renderer; the Mac uses Quick Look.

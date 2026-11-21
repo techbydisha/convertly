@@ -797,6 +797,9 @@ export class Builder {
     this.bodies = new Map();
     this.next = 3;
     this.pageObjects = [];
+    // key -> [raw, width, height]: images to swap as they are copied, which is
+    // how a PDF is made smaller without rewriting anything else.
+    this.replace = new Map();
   }
 
   _alloc() { return this.next++; }
@@ -839,6 +842,21 @@ export class Builder {
       // Never drag in a page we didn't ask for (an annotation may link to one).
       const probe = target instanceof PdfStream ? target.dict : target;
       if (isDict(probe) && nameOf(probe.get('Type')) === 'Page' && !selected.has(key)) return null;
+      if (target instanceof PdfStream && this.replace.has(key)) {
+        const [raw, width, height] = this.replace.get(key);
+        const num = this._alloc();
+        memo.set(key, num);
+        const body = new Map();
+        for (const [k, v] of target.dict) {
+          if (k !== 'Length') body.set(k, this._copy(doc, v, memo, selected, depth + 1));
+        }
+        // The page scales the image into a box, so new pixel dimensions are
+        // safe -- only /Width and /Height describe them.
+        body.set('Width', width);
+        body.set('Height', height);
+        this.bodies.set(num, new PdfStream(body, raw));
+        return new Ref(num, 0);
+      }
       const num = this._alloc();
       memo.set(key, num);
       this.bodies.set(num, this._copy(doc, target, memo, selected, depth + 1));
@@ -905,6 +923,73 @@ export class Builder {
 }
 
 // --- page ranges ----------------------------------------------------------
+
+/**
+ * Every re-encodable image these pages use, as Map(ref key -> PdfStream).
+ *
+ * Only DCTDecode -- a JPEG, which can be decoded and encoded again. Anything
+ * else (a PNG-style Flate bitmap, a mask, a JPEG 2000) is left exactly as it
+ * is rather than guessed at, which is why compressing a PDF of scans helps and
+ * compressing a PDF of text does nothing.
+ */
+export function jpegImages(doc, pages) {
+  const found = new Map();
+  const seen = new Set();
+
+  function walk(resources, depth = 0) {
+    if (depth > 8 || !isDict(resources)) return;
+    const xobjects = doc.resolve(resources.get('XObject'));
+    if (!isDict(xobjects)) return;
+    for (const value of xobjects.values()) {
+      if (!(value instanceof Ref)) continue;
+      const key = value.key();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const stream = doc.resolve(value);
+      if (!(stream instanceof PdfStream)) continue;
+      const subtype = nameOf(doc.resolve(stream.dict.get('Subtype')));
+      if (subtype === 'Form') {
+        walk(doc.resolve(stream.dict.get('Resources')), depth + 1);
+        continue;
+      }
+      if (subtype !== 'Image') continue;
+      const filters = doc.resolve(stream.dict.get('Filter'));
+      const names = (Array.isArray(filters) ? filters : [filters])
+        .map(f => nameOf(doc.resolve(f)));
+      if (names.length === 1 && names[0] === 'DCTDecode') found.set(key, stream);
+    }
+  }
+
+  for (const page of pages) {
+    const merged = new Map(page.obj);
+    for (const [k, v] of page.inherited) if (!merged.has(k)) merged.set(k, v);
+    walk(doc.resolve(merged.get('Resources')));
+  }
+  return found;
+}
+
+/**
+ * Rewrite a PDF with its photographs re-encoded smaller.
+ *
+ * `encoder(jpeg, quality, maxPx)` returns [bytes, width, height] or null. It
+ * is injected so this module stays free of any image library -- the macOS app
+ * hands in one built on sips, this build one built on a canvas.
+ *
+ * Returns [pdfBytes, imagesChanged].
+ */
+export async function compress(data, encoder, quality = 60, maxPx = null) {
+  const doc = new PDF(data);
+  const pages = doc.pages();
+  const replace = new Map();
+  for (const [key, stream] of jpegImages(doc, pages)) {
+    const made = await encoder(stream.raw, quality, maxPx);
+    if (made && made[0].length < stream.raw.length) replace.set(key, made);
+  }
+  const builder = new Builder();
+  builder.replace = replace;
+  builder.add(doc, Array.from({ length: pages.length }, (_, i) => i + 1));
+  return [builder.build(), replace.size];
+}
 
 /** Turn "2-4", "1,3,5-7", "2-" or "" into a list of 1-based page numbers. */
 export function parseRanges(spec, total) {
