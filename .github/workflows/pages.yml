@@ -32,12 +32,16 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Two jobs, not one, and this is the reason: uploading the artifact and asking
+# to deploy it have to happen in separate jobs. The artifact API is eventually
+# consistent, and in one job deploy-pages queries it about half a second after
+# the upload finishes -- often before it is visible -- and fails with "No
+# artifacts named github-pages were found". The job boundary is the wait.
+# deploy-pages' own backoff does not cover this; it polls the deployment, not
+# the artifact lookup that happens first.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
 
@@ -76,5 +80,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
