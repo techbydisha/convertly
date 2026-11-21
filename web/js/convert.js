@@ -8,7 +8,7 @@
 import { convertedName } from './naming.js';
 import { OUTPUT_FORMATS, kindOf, unsupportedReason } from './kinds.js';
 import { decodeImage } from './decode.js';
-import { fitJpeg, budgetFor } from './fit.js';
+import { fitJpeg, fitPng, budgetFor } from './fit.js';
 import { jpegToPdf } from './pdfwrite.js';
 import { iworkPreview } from './unzip.js';
 
@@ -16,12 +16,16 @@ export class ConversionError extends Error {}
 
 export const MAX_BYTES = 200 * 1024 * 1024;
 
-const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', pdf: 'application/pdf' };
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', pdf: 'application/pdf' };
 
 async function imageToOutput(blobOrFile, name, outFormat, quality, maxPx, targetBytes) {
   const budget = budgetFor(outFormat, targetBytes);
   const bitmap = await decodeImage(new File([blobOrFile], name, { type: blobOrFile.type || '' }));
   try {
+    if (outFormat === 'png') {
+      const fitted = await fitPng(bitmap, { maxPx, targetBytes });
+      return { blob: fitted.blob, note: fitted.note };
+    }
     const fitted = await fitJpeg(bitmap, { quality, maxPx, targetBytes: budget });
     if (outFormat === 'pdf') {
       const jpeg = new Uint8Array(await fitted.blob.arrayBuffer());

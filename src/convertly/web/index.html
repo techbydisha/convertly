@@ -167,7 +167,7 @@
 <div class="wrap">
   <header>
     <h1>Convertly</h1>
-    <div class="sub">Convert images and documents to JPG, JPEG or PDF. Runs entirely on your Mac — nothing is uploaded or saved.</div>
+    <div class="sub">Convert images and documents to JPG, JPEG, PNG or PDF. Runs entirely on your Mac — nothing is uploaded or saved.</div>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -191,6 +191,7 @@
     <div class="segmented" id="formats">
       <button data-fmt="jpg" aria-pressed="true">JPG</button>
       <button data-fmt="jpeg" aria-pressed="false">JPEG</button>
+      <button data-fmt="png" aria-pressed="false">PNG</button>
       <button data-fmt="pdf" aria-pressed="false">PDF</button>
     </div>
     <div class="quality" id="qualityBox">
@@ -465,6 +466,7 @@
     if (!btn || running) return;
     format = btn.dataset.fmt;
     [...e.currentTarget.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+    syncOptions();
     invalidate();
   });
   quality.addEventListener('input', () => { qval.value = quality.value; });
@@ -493,6 +495,10 @@
     return targetSel.value ? Number(targetSel.value) : null;
   }
 
+  // Which formats keep every pixel, so have no quality to choose.
+  // Pinned by shared/spec/file-kinds.json.
+  const LOSSLESS = ['png'];
+
   function syncOptions() {
     const custom = targetSel.value === 'custom';
     targetCustom.classList.toggle('hidden', !custom);
@@ -500,10 +506,17 @@
     const target = targetBytes();
     resizeSel.classList.toggle('set', !!resizeSel.value);
     targetSel.classList.toggle('set', !!targetSel.value);
-    // With a size budget the quality is chosen for you, by searching for the
-    // best that fits -- so the slider stops applying.
-    $('qualityBox').classList.toggle('off', !!target);
-    qval.value = target ? 'auto' : quality.value;
+    // Two reasons the slider can stop applying, and they are different things,
+    // so the readout says which: PNG keeps every pixel and has no quality to
+    // set at all, while a size budget picks the best quality that fits.
+    const lossless = LOSSLESS.includes(format);
+    $('qualityBox').classList.toggle('off', lossless || !!target);
+    $('qualityBox').title = lossless
+      ? 'PNG keeps every pixel, so there is no quality to choose'
+      : target
+        ? 'With a size limit, the best quality that fits is chosen for you'
+        : '';
+    qval.value = lossless ? 'n/a' : target ? 'auto' : quality.value;
   }
 
   [resizeSel, targetSel].forEach(el => el.addEventListener('change', () => {

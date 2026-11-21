@@ -32,7 +32,11 @@ IWORK_EXTS = ("pages", "key", "numbers")
 
 INPUT_EXTS = IMAGE_EXTS + PDF_EXTS + WORD_EXTS + IWORK_EXTS
 
-OUTPUT_FORMATS = {"jpg": "jpg", "jpeg": "jpeg", "pdf": "pdf"}
+OUTPUT_FORMATS = {"jpg": "jpg", "jpeg": "jpeg", "png": "png", "pdf": "pdf"}
+
+# PNG stores the picture exactly, so there is no quality to trade away. A size
+# limit can still be met, but only by making the picture smaller.
+LOSSLESS_FORMATS = ("png",)
 
 MAX_BYTES = 200 * 1024 * 1024
 
@@ -109,6 +113,20 @@ def _to_jpeg(src: str, dst: str, quality: int, max_px: int | None = None) -> boo
     if max_px:
         args += ["-Z", str(max_px)]
     return _sips(args + [src, "--out", dst]) and os.path.exists(dst)
+
+
+def _to_png(src: str, dst: str, max_px: int | None = None) -> bool:
+    args = ["-s", "format", "png"]
+    if max_px:
+        args += ["-Z", str(max_px)]
+    return _sips(args + [src, "--out", dst]) and os.path.exists(dst)
+
+
+def _png_size(png: bytes):
+    """(width, height) from the IHDR chunk, which is always first."""
+    if len(png) < 24 or png[:8] != b"\x89PNG\r\n\x1a\n" or png[12:16] != b"IHDR":
+        raise ConversionError("Could not read image dimensions")
+    return struct.unpack(">II", png[16:24])
 
 
 def _dimensions(src: str):
@@ -200,6 +218,66 @@ def _fit_jpeg(src: str, tmpdir: str, quality: int,
                          f"{_human_size(smallest[0])} at {width}\u00d7{height}")
 
 
+def _fit_png(src: str, tmpdir: str, max_px: int | None, target_bytes: int | None):
+    """Encode `src` as PNG, optionally resized and/or squeezed under a size.
+
+    PNG keeps every pixel, so unlike `_fit_jpeg` there is nothing to trade
+    away: the only way under a size limit is a smaller picture. That makes the
+    search simpler rather than harder -- a PNG only grows with its pixel count,
+    so the largest edge that fits can be bisected for directly, instead of the
+    estimate-and-retry the JPEG path needs.
+    """
+    dst = os.path.join(tmpdir, "fit.png")
+    size = _dimensions(src)
+    longest = max(size) if size else None
+
+    # `sips -Z` enlarges images smaller than the limit. Never scale up.
+    if max_px and longest:
+        max_px = min(max_px, longest)
+
+    attempts = []
+
+    def encode(px):
+        if not _to_png(src, dst, px):
+            raise ConversionError("Not a readable image")
+        with open(dst, "rb") as fh:
+            data = fh.read()
+        attempts.append((len(data), data))
+        return data
+
+    def describe(data):
+        """Say only what actually changed, comparing against the source."""
+        width, height = _png_size(data)
+        if size and (width, height) != tuple(size):
+            return f"Resized to {width}×{height}"
+        return None
+
+    first = encode(max_px)
+    if not target_bytes or len(first) <= target_bytes:
+        return first, describe(first)
+
+    best = None
+    px = max_px or longest
+    if px is not None:                   # dimensions unknown -> can't shrink
+        low, high = MIN_EDGE_PX, px
+        while low <= high and len(attempts) < MAX_FIT_ATTEMPTS:
+            mid = (low + high) // 2
+            data = encode(mid)
+            if len(data) <= target_bytes:
+                best = data
+                low = mid + 1
+            else:
+                high = mid - 1
+    if best is not None:
+        return best, describe(best)
+
+    # Couldn't reach the target: hand back the smallest we managed and say so.
+    smallest = min(attempts, key=lambda a: a[0])
+    width, height = _png_size(smallest[1])
+    return smallest[1], (f"Could not reach the size limit -- smallest is "
+                         f"{_human_size(smallest[0])} at {width}×{height}")
+
+
 def _human_size(count: int) -> str:
     """Decimal units, the way Finder shows file sizes on macOS.
 
@@ -236,8 +314,9 @@ def _quicklook(src: str, size: int, timeout: int = 30) -> bytes | None:
 
 
 def _render_page1(src: str, tmpdir: str, quality: int, size: int = RENDER_PX,
-                  max_px: int | None = None, target_bytes: int | None = None):
-    """First page of a document as JPEG bytes. Returns (bytes, note)."""
+                  max_px: int | None = None, target_bytes: int | None = None,
+                  out_format: str = "jpg"):
+    """First page of a document as image bytes. Returns (bytes, note)."""
     png = _quicklook(src, size)
     if not png:
         raise ConversionError("Could not render this document")
@@ -245,6 +324,8 @@ def _render_page1(src: str, tmpdir: str, quality: int, size: int = RENDER_PX,
     with open(png_path, "wb") as fh:
         fh.write(png)
     # Fit from the lossless render rather than re-encoding a JPEG twice.
+    if out_format == "png":
+        return _fit_png(png_path, tmpdir, max_px, target_bytes)
     return _fit_jpeg(png_path, tmpdir, quality, max_px, target_bytes)
 
 
@@ -378,6 +459,9 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85,
             return payload, ext, note
 
         if what == "image":
+            if out_format == "png":
+                png, note = _fit_png(src, tmpdir, max_px, target_bytes)
+                return png, ext, note
             budget = _budget_for(out_format, target_bytes)
             jpeg, note = _fit_jpeg(src, tmpdir, quality, max_px, budget)
             if out_format == "pdf":
@@ -390,7 +474,8 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85,
             pages = _pdf_page_count(data)
             note = f"First page only ({pages} pages in the PDF)" if pages and pages > 1 else None
             jpeg, fit_note = _render_page1(src, tmpdir, quality,
-                                           max_px=max_px, target_bytes=target_bytes)
+                                           max_px=max_px, target_bytes=target_bytes,
+                                           out_format=out_format)
             return jpeg, ext, _join(note, fit_note)
 
         # Word: a real export if Word is around, otherwise a rendered page.
@@ -404,12 +489,14 @@ def convert(data: bytes, filename: str, out_format: str, quality: int = 85,
                 fh.write(exported)
             note = f"First page only ({pages} pages in the document)" if pages and pages > 1 else None
             jpeg, fit_note = _render_page1(pdf_path, tmpdir, quality,
-                                           max_px=max_px, target_bytes=target_bytes)
+                                           max_px=max_px, target_bytes=target_bytes,
+                                           out_format=out_format)
             return jpeg, ext, _join(note, fit_note)
 
         budget = _budget_for(out_format, target_bytes)
         jpeg, fit_note = _render_page1(src, tmpdir, quality,
-                                       max_px=max_px, target_bytes=budget)
+                                       max_px=max_px, target_bytes=budget,
+                                       out_format=out_format)
         note = _join("First page only -- open this in Microsoft Word for a full export",
                      fit_note)
         return (jpeg_to_pdf(jpeg), ext, note) if out_format == "pdf" else (jpeg, ext, note)

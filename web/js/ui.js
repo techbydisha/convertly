@@ -6,7 +6,7 @@
 // where that one posts the file to a local server, this converts it here.
 
 import { convertFile } from './convert.js';
-import { acceptAttribute, unsupportedReason, extOf, kindOf } from './kinds.js';
+import { acceptAttribute, unsupportedReason, extOf, kindOf, isLossless } from './kinds.js';
 import { decodeImage } from './decode.js';
 import { humanSize, parseSize } from './sizes.js';
 
@@ -228,6 +228,7 @@ $('formats').addEventListener('click', e => {
   if (!btn || running) return;
   format = btn.dataset.fmt;
   [...e.currentTarget.children].forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  syncOptions();
   invalidate();
 });
 quality.addEventListener('input', () => { qval.value = quality.value; });
@@ -245,10 +246,17 @@ function syncOptions() {
   const target = targetBytes();
   resizeSel.classList.toggle('set', !!resizeSel.value);
   targetSel.classList.toggle('set', !!targetSel.value);
-  // With a size budget the quality is chosen for you, by searching for the
-  // best that fits -- so the slider stops applying.
-  $('qualityBox').classList.toggle('off', !!target);
-  qval.value = target ? 'auto' : quality.value;
+  // Two reasons the slider can stop applying, and they are different things,
+  // so the readout says which: PNG keeps every pixel and has no quality to
+  // set at all, while a size budget picks the best quality that fits for you.
+  const lossless = isLossless(format);
+  $('qualityBox').classList.toggle('off', lossless || !!target);
+  $('qualityBox').title = lossless
+    ? 'PNG keeps every pixel, so there is no quality to choose'
+    : target
+      ? 'With a size limit, the best quality that fits is chosen for you'
+      : '';
+  qval.value = lossless ? 'n/a' : target ? 'auto' : quality.value;
 }
 
 [resizeSel, targetSel].forEach(el => el.addEventListener('change', () => {

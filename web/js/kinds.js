@@ -15,7 +15,14 @@ export const IWORK_EXTS = ['pages', 'key', 'numbers'];
 
 export const INPUT_EXTS = [...IMAGE_EXTS, ...PDF_EXTS, ...WORD_EXTS, ...IWORK_EXTS];
 
-export const OUTPUT_FORMATS = { jpg: 'jpg', jpeg: 'jpeg', pdf: 'pdf' };
+export const OUTPUT_FORMATS = { jpg: 'jpg', jpeg: 'jpeg', png: 'png', pdf: 'pdf' };
+
+// PNG stores the picture exactly, so there is no quality to trade away. A size
+// limit can still be met, but only by making the picture smaller -- and the
+// quality slider has to say it does not apply rather than quietly do nothing.
+export const LOSSLESS_FORMATS = ['png'];
+
+export const isLossless = format => LOSSLESS_FORMATS.includes(format);
 
 // Decoders this build has. Everything else in IMAGE_EXTS is handled by the
 // browser's own image decoding, which every browser does for these.

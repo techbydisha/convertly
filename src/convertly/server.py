@@ -37,6 +37,7 @@ DEFAULT_PORT = 8765
 MIME = {
     "jpg": "image/jpeg",
     "jpeg": "image/jpeg",
+    "png": "image/png",
     "pdf": "application/pdf",
 }
 

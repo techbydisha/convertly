@@ -62,6 +62,12 @@ class Pages(ServerCase):
 
 @requires_sips
 class ConvertEndpoint(ServerCase):
+    def test_every_output_format_has_a_media_type(self):
+        """A format the converter offers but the server cannot label is a
+        500 waiting to happen -- PNG was exactly that until this test."""
+        for fmt in conv.OUTPUT_FORMATS:
+            self.assertIn(fmt, srv.MIME, f"no media type for {fmt}")
+
     def test_converts_and_names_the_result(self):
         status, headers, body = self.post(
             "/convert?format=jpg", make_image("heic"),

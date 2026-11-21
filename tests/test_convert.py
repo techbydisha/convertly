@@ -17,6 +17,7 @@ from .helpers import (
 )
 
 JPEG_MAGIC = b"\xff\xd8\xff"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def no_word():
@@ -81,6 +82,41 @@ class Images(unittest.TestCase):
     def test_jpeg_extension_differs_only_in_name(self):
         _, ext, _ = conv.convert(make_image("heic"), "p.heic", "jpeg")
         self.assertEqual(ext, "jpeg")
+
+    def test_image_to_png(self):
+        out, ext, note = conv.convert(make_image("heic"), "p.heic", "png")
+        self.assertTrue(out.startswith(PNG_MAGIC))
+        self.assertEqual(ext, "png")
+        self.assertIsNone(note)
+
+    def test_png_keeps_the_source_dimensions(self):
+        out, _, _ = conv.convert(make_image("heic", 300, 200), "p.heic", "png")
+        self.assertEqual(conv._png_size(out), (300, 200))
+
+    def test_png_ignores_quality_because_it_is_lossless(self):
+        low, _, _ = conv.convert(make_image("heic", 300, 200), "p.heic", "png", quality=40)
+        high, _, _ = conv.convert(make_image("heic", 300, 200), "p.heic", "png", quality=100)
+        self.assertEqual(low, high, "quality must not change a lossless format")
+
+    def test_png_meets_a_size_limit_by_shrinking(self):
+        source = make_noisy_image("png", 1200, 900)
+        out, _, note = conv.convert(source, "p.png", "png", target_bytes=120_000)
+        self.assertLessEqual(len(out), 120_000)
+        width, height = conv._png_size(out)
+        self.assertLess(width, 1200, "the only way under the limit is a smaller picture")
+        self.assertIn(f"{width}\u00d7{height}", note)
+
+    def test_png_is_never_enlarged(self):
+        source = make_image("png", 200, 150)
+        out, _, note = conv.convert(source, "p.png", "png", max_px=4000)
+        self.assertEqual(conv._png_size(out), (200, 150))
+        self.assertIsNone(note, "nothing changed, so nothing should be claimed")
+
+    def test_png_says_so_when_a_limit_cannot_be_met(self):
+        source = make_noisy_image("png", 1200, 900)
+        out, _, note = conv.convert(source, "p.png", "png", target_bytes=1200)
+        self.assertIn("Could not reach the size limit", note)
+        self.assertTrue(out.startswith(PNG_MAGIC), "still a usable file, just not small enough")
 
     def test_image_to_pdf(self):
         out, ext, _ = conv.convert(make_image("heic"), "p.heic", "pdf")

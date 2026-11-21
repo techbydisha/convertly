@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 
 import { stemOf, convertedName, extractName, splitExt, COMBINED_NAME, FALLBACK_STEM } from '../js/naming.js';
 import { humanSize, parseSize } from '../js/sizes.js';
-import { kindOf, canHandle, unsupportedReason, OUTPUT_FORMATS, INPUT_EXTS } from '../js/kinds.js';
+import { kindOf, canHandle, unsupportedReason, OUTPUT_FORMATS, INPUT_EXTS,
+         LOSSLESS_FORMATS, isLossless } from '../js/kinds.js';
 
 const spec = name => JSON.parse(readFileSync(
   fileURLToPath(new URL(`../../shared/spec/${name}.json`, import.meta.url)), 'utf8'));
@@ -125,6 +126,22 @@ test('files are classified as the spec says', () => {
 test('output formats match the spec', () => {
   const fromSpec = Object.fromEntries(kinds.output_formats.map(f => [f.format, f.extension]));
   assert.deepEqual(OUTPUT_FORMATS, fromSpec);
+});
+
+test('lossless formats match the spec', () => {
+  assert.deepEqual([...LOSSLESS_FORMATS].sort(), [...kinds.lossless_formats.formats].sort());
+});
+
+test('a lossless format is a real output format, and the flag agrees', () => {
+  for (const fmt of LOSSLESS_FORMATS) {
+    assert.ok(fmt in OUTPUT_FORMATS, `${fmt} is not an output format`);
+    assert.equal(isLossless(fmt), true);
+  }
+  // The per-format "lossless" flag in the spec and the list must not disagree.
+  for (const f of kinds.output_formats) {
+    assert.equal(isLossless(f.format), Boolean(f.lossless), f.format);
+  }
+  assert.equal(isLossless('jpg'), false);
 });
 
 test('what this build supports matches what the spec claims for it', () => {

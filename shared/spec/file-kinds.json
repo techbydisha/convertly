@@ -42,6 +42,11 @@
   "output_formats": [
     { "format": "jpg",  "extension": "jpg",  "mime": "image/jpeg" },
     { "format": "jpeg", "extension": "jpeg", "mime": "image/jpeg", "why": "identical bytes to jpg, different extension" },
+    { "format": "png",  "extension": "png",  "mime": "image/png",  "lossless": true, "why": "keeps every pixel exactly; quality does not apply" },
     { "format": "pdf",  "extension": "pdf",  "mime": "application/pdf" }
-  ]
+  ],
+  "lossless_formats": {
+    "description": "Formats that store the picture exactly. The quality setting is meaningless for these, so it must be shown as not applying rather than silently ignored. A size limit can still be met, but only by making the picture smaller -- there is no quality to trade away.",
+    "formats": ["png"]
+  }
 }

@@ -14,7 +14,8 @@ import os
 import unittest
 
 from convertly import naming, pdfedit
-from convertly.convert import INPUT_EXTS, OUTPUT_FORMATS, _human_size, kind
+from convertly.convert import (
+    INPUT_EXTS, LOSSLESS_FORMATS, OUTPUT_FORMATS, _human_size, kind)
 
 SPEC_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shared", "spec")
@@ -120,6 +121,14 @@ class FileKinds(unittest.TestCase):
     def test_output_formats_match(self):
         spec = {f["format"]: f["extension"] for f in load("file-kinds.json")["output_formats"]}
         self.assertEqual(spec, OUTPUT_FORMATS)
+
+    def test_lossless_formats_match(self):
+        spec = load("file-kinds.json")["lossless_formats"]["formats"]
+        self.assertEqual(sorted(spec), sorted(LOSSLESS_FORMATS))
+
+    def test_every_lossless_format_is_a_real_output_format(self):
+        for fmt in LOSSLESS_FORMATS:
+            self.assertIn(fmt, OUTPUT_FORMATS)
 
     def test_word_is_marked_as_local_only(self):
         """The browser build cannot render Word files; the spec must say so."""

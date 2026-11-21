@@ -1,7 +1,7 @@
 # Convertly
 
 A local file converter and PDF editor for macOS. Convert images and documents to
-**JPG**, **JPEG** or **PDF**, resize pictures to fit a size limit, pull pages out
+**JPG**, **JPEG**, **PNG** or **PDF**, resize pictures to fit a size limit, pull pages out
 of a PDF, and join PDFs together.
 
 Everything runs on your own device. Nothing is uploaded, nothing is stored, and
@@ -13,7 +13,7 @@ there is nothing to install.
 | --- | --- | --- |
 | Where | your Mac | any device, in the browser |
 | Files | never leave the machine | never leave the browser — the page cannot open a network connection |
-| Pictures → JPG / JPEG / PDF | yes | yes |
+| Pictures → JPG / JPEG / PNG / PDF | yes | yes |
 | Resize, and fit under a size limit | yes | yes |
 | Pages, Keynote, Numbers | yes | yes, to PDF |
 | Editing PDFs | yes | not yet |
@@ -125,12 +125,12 @@ refused with a clear message rather than mangled.
 
 ## What it accepts
 
-| Input | → JPG / JPEG | → PDF |
-| --- | --- | --- |
-| HEIC, HEIF, PNG, JPEG, TIFF, GIF, BMP, WebP | full quality | image embedded on a page |
-| PDF | first page, ~200 dpi ¹ | copied unchanged |
-| Word (`.docx`, `.doc`, `.rtf`) | first page ¹ ² | first page ¹ ², or a full export ² |
-| Pages, Keynote, Numbers | from the document's stored preview ³ | same ³ |
+| Input | → JPG / JPEG | → PNG ⁴ | → PDF |
+| --- | --- | --- | --- |
+| HEIC, HEIF, PNG, JPEG, TIFF, GIF, BMP, WebP | full quality | every pixel kept | image embedded on a page |
+| PDF | first page, ~200 dpi ¹ | first page, ~200 dpi ¹ | copied unchanged |
+| Word (`.docx`, `.doc`, `.rtf`) | first page ¹ ² | first page ¹ ² | first page ¹ ², or a full export ² |
+| Pages, Keynote, Numbers | from the document's stored preview ³ | same ³ | same ³ |
 
 ¹ **First page only.** macOS has no built-in multi-page rasteriser, so
 converting a document *to an image* covers page one. Rows say so, with the real
@@ -145,6 +145,14 @@ rendered first page within a few seconds instead of hanging. Start with
 ³ **iWork files.** Pages, Keynote and Numbers store a PDF preview inside their
 own documents, and that is what gets used — no Apple apps required. Documents
 saved without one can't be converted; export them from Pages instead.
+
+⁴ **PNG is lossless**, so the quality slider doesn't apply and shows `n/a`.
+Expect photographs to come out *larger* than the JPEG they came from — that is
+the trade, and it's the right choice for screenshots, logos and anything with
+sharp edges or transparency, which JPEG smudges. Transparency is preserved;
+converting the same file to JPG flattens it onto white instead. A size limit
+still works, but the only way to meet it is a smaller picture, so the row says
+what it had to do.
 
 ---
 

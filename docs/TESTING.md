@@ -198,6 +198,7 @@ Before a release, run `python3 run.py` and confirm:
 - [ ] Downloaded files open correctly and match their preview
 - [ ] **Max file size** of 1 MB on a large photo produces a file under 1 MB, and the row explains what changed
 - [ ] Setting a size limit shows `auto` beside the quality slider and dims it
+- [ ] Choosing **PNG** shows `n/a` beside the quality slider; a PNG photo may be larger than its source, which is correct
 - [ ] **Edit PDF**: page count is right, `2-4` produces exactly those pages, an invalid range blocks the button
 - [ ] Combining two PDFs respects the ▲▼ order
 - [ ] The browser console is free of errors
@@ -213,6 +214,8 @@ Serve it with `python3 -m http.server -d web 8000` and confirm:
 - [ ] **Resize** set larger than the picture, *together with* a size limit, gives exactly the
       same result as no resize at all — same bytes, same dimensions
 - [ ] A `.pages` file converts to PDF, and to JPG is refused with an explanation
+- [ ] Choosing **PNG** dims the quality slider and shows `n/a`, not `auto`
+- [ ] A transparent PNG stays transparent as PNG, and flattens to **white** (not black) as JPG
 - [ ] Changing the format clears previous results and removes the Download buttons
 - [ ] At phone width every label stays beside the control it names
 - [ ] The console is free of errors, and the network panel shows nothing beyond the page's own files

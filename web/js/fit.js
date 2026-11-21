@@ -47,27 +47,35 @@ function drawSize(width, height, px) {
   return [w, h];
 }
 
-function canvasFor(width, height) {
+/**
+ * A canvas to draw into.
+ *
+ * `alpha` is the difference between the two output formats, not a detail:
+ * JPEG cannot store transparency, so a transparent picture is flattened onto
+ * white -- without that it comes out black where it should be clear. PNG can
+ * store it, so it must be kept.
+ */
+function canvasFor(width, height, { alpha = false } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d', { alpha: false });
+  const ctx = canvas.getContext('2d', { alpha });
   if (!ctx) throw new FitError('This browser would not give us a canvas to draw on');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  // JPEG has no transparency, so a transparent PNG would otherwise come out
-  // with black where it should be white.
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
+  if (!alpha) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+  }
   return { canvas, ctx };
 }
 
-function toJpeg(canvas, quality) {
+function encodeCanvas(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       blob => blob ? resolve(blob) : reject(new FitError('The browser could not encode this image')),
-      'image/jpeg',
-      quality / 100,
+      type,
+      quality,
     );
   });
 }
@@ -97,7 +105,7 @@ export async function fitJpeg(bitmap, { quality = 85, maxPx = null, targetBytes 
     const [w, h] = drawSize(srcW, srcH, px);
     const { canvas, ctx } = canvasFor(w, h);
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await toJpeg(canvas, q);
+    const blob = await encodeCanvas(canvas, 'image/jpeg', q / 100);
     // Let the backing store go before the next attempt allocates another.
     canvas.width = canvas.height = 0;
     const attempt = { size: blob.size, px, q, blob, width: w, height: h };
@@ -151,6 +159,68 @@ export async function fitJpeg(bitmap, { quality = 85, maxPx = null, targetBytes 
     if (nextPx >= px || (nextPx <= MIN_EDGE_PX && px <= MIN_EDGE_PX)) break;
     px = nextPx;
   }
+
+  // Couldn't reach the target: hand back the smallest we managed and say so.
+  const smallest = attempts.reduce((a, b) => (b.size < a.size ? b : a));
+  return {
+    blob: smallest.blob,
+    width: smallest.width,
+    height: smallest.height,
+    note: `Could not reach the size limit -- smallest is `
+      + `${humanSize(smallest.size)} at ${smallest.width}×${smallest.height}`,
+  };
+}
+
+/**
+ * Encode `bitmap` as PNG, within `maxPx` and/or under `targetBytes`.
+ *
+ * A port of _fit_png() in src/convertly/convert.py. PNG keeps every pixel, so
+ * unlike fitJpeg there is nothing to trade away: the only way under a size
+ * limit is a smaller picture. That makes the search simpler rather than
+ * harder -- a PNG only grows with its pixel count, so the largest edge that
+ * fits can be bisected for directly.
+ */
+export async function fitPng(bitmap, { maxPx = null, targetBytes = null } = {}) {
+  const srcW = bitmap.width, srcH = bitmap.height;
+  if (!srcW || !srcH) throw new FitError('This image has no size');
+
+  const [startW, startH] = drawSize(srcW, srcH, maxPx);
+  const startPx = Math.max(startW, startH);
+  const attempts = [];
+
+  async function encode(px) {
+    const [w, h] = drawSize(srcW, srcH, px);
+    const { canvas, ctx } = canvasFor(w, h, { alpha: true });
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await encodeCanvas(canvas, 'image/png');
+    canvas.width = canvas.height = 0;
+    const attempt = { size: blob.size, blob, width: w, height: h };
+    attempts.push(attempt);
+    return attempt;
+  }
+
+  function describe(attempt) {
+    return (attempt.width !== srcW || attempt.height !== srcH)
+      ? `Resized to ${attempt.width}×${attempt.height}`
+      : null;
+  }
+  const done = a => ({ blob: a.blob, width: a.width, height: a.height, note: describe(a) });
+
+  const first = await encode(startPx);
+  if (!targetBytes || first.size <= targetBytes) return done(first);
+
+  let best = null, low = MIN_EDGE_PX, high = startPx;
+  while (low <= high && attempts.length < MAX_FIT_ATTEMPTS) {
+    const mid = Math.floor((low + high) / 2);
+    const attempt = await encode(mid);
+    if (attempt.size <= targetBytes) {
+      best = attempt;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  if (best) return done(best);
 
   // Couldn't reach the target: hand back the smallest we managed and say so.
   const smallest = attempts.reduce((a, b) => (b.size < a.size ? b : a));

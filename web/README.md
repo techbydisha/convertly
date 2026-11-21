@@ -9,9 +9,14 @@ because there is no server behind it — GitHub Pages serves static files only.
 
 ## Status
 
-**Pictures work.** HEIC, PNG, JPEG, GIF, BMP and WebP convert to JPG, JPEG or
-PDF; resizing and fitting under a size limit work; Pages, Keynote and Numbers
-convert to PDF from the preview stored inside them.
+**Pictures work.** HEIC, PNG, JPEG, GIF, BMP and WebP convert to JPG, JPEG,
+PNG or PDF; resizing and fitting under a size limit work; Pages, Keynote and
+Numbers convert to PDF from the preview stored inside them.
+
+PNG output keeps every pixel, so the quality slider shows `n/a` and
+transparency survives — converting the same file to JPG flattens it onto white
+instead. A size limit still applies, but with nothing to trade away the only
+way under it is a smaller picture, which the row reports.
 
 **Not yet:** editing PDFs, turning a PDF into images, and TIFF. Word documents
 are not coming — Quick Look has no browser equivalent.
