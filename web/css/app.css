@@ -1,169 +1,391 @@
-/* The same look as the macOS app's interface, in a file of its own.
+/* Convertly, in the browser.
  *
- * Keeping the CSS out of the page is what lets the Content Security Policy say
- * style-src 'self' with no 'unsafe-inline': nothing in this build needs the
- * browser to trust inline code. */
+ * Light only, on purpose. The old build followed prefers-color-scheme and went
+ * dark on most phones; this one is warm paper everywhere, so the thing you see
+ * is the thing everyone sees.
+ *
+ * The CSS lives out here rather than in the page so the Content Security
+ * Policy can say style-src 'self' with no 'unsafe-inline': nothing in this
+ * build asks the browser to trust inline code. */
 
 :root {
-  --bg: #f6f6f4;
-  --card: #ffffff;
-  --text: #1c1b19;
-  --muted: #6f6d68;
-  --line: #e2e0da;
-  --accent: #c2643a;
-  --accent-soft: #f6ece6;
-  --ok: #2f7d55;
-  --warn: #8a6410;
+  --bg: #f7f4ee;             /* warm paper, not grey */
+  --surface: #ffffff;
+  --surface-sunk: #fbf9f5;
+  --ink: #19181a;
+  --ink-soft: #4a463f;
+  --muted: #726c62;
+  --faint: #938d82;
+  --line: #e7e1d7;
+  --line-strong: #d8d0c2;
+
+  --green: #16874a;
+  --green-hover: #0f6b3a;
+  --green-soft: #e9f3ec;
+  --green-line: #bcdcc7;
+
+  --amber: #9a6b1f;
+  --amber-soft: #f6eedd;
+  --amber-line: #ead9b8;
   --err: #b4392f;
-  --thumb-bg: #f0efec;
-  --radius: 14px;
+  --err-soft: #f9ebe9;
+
+  --radius: 18px;
+  --radius-lg: 24px;
+  --shadow: 0 1px 2px rgba(25, 24, 26, .04), 0 8px 24px rgba(25, 24, 26, .05);
+  --shadow-lift: 0 2px 6px rgba(25, 24, 26, .06), 0 18px 40px rgba(25, 24, 26, .09);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17161a;
-    --card: #201f24;
-    --text: #ecebe8;
-    --muted: #9a978f;
-    --line: #33313a;
-    --accent: #e08757;
-    --accent-soft: #2c2420;
-    --ok: #6cc08c;
-    --warn: #d9ad5c;
-    --err: #e8796d;
-    --thumb-bg: #2a2830;
-  }
-}
+
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+
 body {
   margin: 0;
-  padding: 40px 20px 60px;
   background: var(--bg);
-  color: var(--text);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.wrap { max-width: 720px; margin: 0 auto; }
-header { margin-bottom: 24px; }
-h1 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
-.sub { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
 
-/* Drop zone */
-.dropzone {
-  border: 1.5px dashed var(--line);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: 40px 24px;
-  text-align: center;
+.hidden { display: none !important; }
+
+/* ------------------------------------------------------------------ header */
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(247, 244, 238, .85);
+  backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+.bar {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 660;
+  letter-spacing: -.02em;
+  color: var(--ink);
+  text-decoration: none;
+  flex: none;
+}
+.mark {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: var(--green);
+  display: grid; place-items: center;
+  flex: none;
+}
+.mark svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.2; }
+
+nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+nav::-webkit-scrollbar { display: none; }
+
+nav button {
+  appearance: none; border: 0; background: none;
+  font: inherit; font-size: 14.5px; font-weight: 520;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: border-color .15s, background .15s, transform .15s;
+  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px;
+  transition: background .15s, color .15s;
 }
-.dropzone:hover { border-color: var(--accent); }
-.dropzone.over { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.008); }
-.dropzone .big { font-size: 16px; font-weight: 550; }
-.dropzone .small { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
-.dropzone svg { width: 30px; height: 30px; stroke: var(--accent); fill: none; stroke-width: 1.6; margin-bottom: 10px; }
+nav button:hover { background: rgba(25, 24, 26, .05); color: var(--ink); }
+nav button[aria-current="true"] { background: var(--green-soft); color: var(--green-hover); font-weight: 600; }
 
-/* Options */
-.options { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin: 18px 2px 0; }
-/* A label and the control it names are one thing, and a narrow screen must
- * not wrap between them -- "Max file size" stranded above someone else's
- * dropdown is worse than an extra row. */
-.field { display: flex; align-items: center; gap: 8px; }
-.label { font-size: 13px; color: var(--muted); }
-.segmented { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
-.segmented button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 13.5px; padding: 5px 14px; border-radius: 7px; cursor: pointer; }
-.segmented button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: 550; }
-.quality { display: flex; align-items: center; gap: 8px; }
-.quality input { width: 104px; accent-color: var(--accent); }
-.quality output { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--muted); width: 34px; }
-.options.locked { opacity: .5; pointer-events: none; }
-.options.second { margin-top: 10px; }
-.quality.off { opacity: .45; }
-.quality.off input { pointer-events: none; }
+.soon {
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--amber); background: var(--amber-soft);
+  padding: 2px 6px; border-radius: 5px;
+}
 
-select.opt {
-  font: inherit; font-size: 13.5px; padding: 5px 26px 5px 10px;
-  border-radius: 8px; border: 1px solid var(--line);
-  background: var(--card); color: var(--text); cursor: pointer;
+/* Where other converters put "Log in / Sign up", this puts the reason it
+   exists -- in words that don't assume you know what a server is. */
+.promise-wrap { position: relative; flex: none; }
+.promise {
   appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-                    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 14px) 52%, calc(100% - 9px) 52%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: 13px; color: var(--muted);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
 }
-select.opt:focus { outline: none; border-color: var(--accent); }
-select.opt.set { border-color: var(--accent); color: var(--accent); font-weight: 550; }
-input.custom {
-  width: 92px; font: inherit; font-size: 13px; padding: 5px 8px;
-  border-radius: 7px; border: 1px solid var(--accent);
-  background: var(--bg); color: var(--text); text-align: center;
-}
-input.custom:focus { outline: none; }
-input.custom.bad { border-color: var(--err); }
+.promise:hover { border-color: var(--green-line); background: var(--green-soft); }
+.promise svg { width: 13px; height: 13px; stroke: var(--green); fill: none; stroke-width: 2; flex: none; }
+.promise b { color: var(--ink-soft); font-weight: 580; white-space: nowrap; }
+.promise .said-short { display: none; }
 
-/* File list */
-.listhead { display: flex; align-items: baseline; justify-content: space-between; margin: 26px 2px 10px; }
-.listhead h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0; text-transform: uppercase; letter-spacing: .06em; }
-.listhead .count { font-size: 12.5px; color: var(--muted); }
+.promise-pop {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 18px 20px;
+  font-size: 13.5px; line-height: 1.55; color: var(--muted);
+  z-index: 30;
+}
+.promise-pop strong { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 7px; }
+.promise-pop p { margin: 0 0 9px; }
+.promise-pop p:last-child { margin-bottom: 0; }
+.promise-pop .proof {
+  color: var(--green-hover); background: var(--green-soft);
+  border-radius: 10px; padding: 9px 12px; font-weight: 520;
+}
+
+/* -------------------------------------------------------------------- main */
+
+main { max-width: 760px; margin: 0 auto; padding: 68px 24px 80px; }
+
+.headline { text-align: center; margin-bottom: 38px; }
+.headline h1 {
+  margin: 0;
+  font-size: clamp(38px, 6.4vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -.035em;
+  font-weight: 680;
+}
+.headline p { margin: 14px auto 0; max-width: 30em; font-size: 17px; color: var(--muted); }
+
+/* ---------------------------------------------------------------- dropzone */
+
+.drop {
+  background: var(--surface);
+  border: 2px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  padding: 52px 28px;
+  text-align: center;
+  box-shadow: var(--shadow);
+  transition: border-color .18s, background .18s, box-shadow .18s, transform .18s;
+}
+.drop.over {
+  border-color: var(--green);
+  background: var(--green-soft);
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+.drop .art { width: 44px; height: 44px; margin: 0 auto 20px; stroke: var(--green); fill: none; stroke-width: 1.7; display: block; }
+.drop .hint { margin-top: 15px; font-size: 14px; color: var(--muted); }
+.drop .types { margin-top: 5px; font-size: 12.5px; color: var(--faint); }
+
+.cta {
+  appearance: none; border: 0;
+  background: var(--green); color: #fff;
+  font: inherit; font-size: 17px; font-weight: 600; letter-spacing: -.01em;
+  padding: 16px 40px;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 107, 58, .3), 0 10px 22px -8px rgba(15, 107, 58, .5);
+  transition: background .15s, transform .12s, box-shadow .15s;
+}
+.cta:hover:not(:disabled) { background: var(--green-hover); transform: translateY(-1px); }
+.cta:active:not(:disabled) { transform: translateY(0); }
+.cta:disabled { background: #c6c1b8; box-shadow: none; cursor: default; transform: none; }
+
+/* ----------------------------------------------------------------- options */
+
+.panel {
+  margin-top: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+}
+.panel h2 {
+  margin: 0 0 14px;
+  font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted);
+}
+.panel.locked { opacity: .5; pointer-events: none; }
+.row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
+.row + .row { margin-top: 18px; }
+
+.chip {
+  appearance: none;
+  font: inherit; font-size: 14px; font-weight: 520;
+  padding: 9px 17px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunk);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color .14s, background .14s, color .14s;
+}
+.chip:hover { border-color: var(--green-line); background: var(--green-soft); }
+.chip[aria-pressed="true"] {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green-hover);
+  font-weight: 620;
+}
+
+.field {
+  font: inherit; font-size: 14px;
+  padding: 9px 13px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sunk);
+  color: var(--ink);
+  min-width: 0;
+}
+.field:focus { outline: none; border-color: var(--green); background: #fff; }
+/* Widths live here rather than on the element: style-src 'self' blocks inline
+   style attributes, so a style="" on the markup is silently dropped. */
+.size-field { width: 118px; }
+.edge-field { width: 108px; }
+.field.bad { border-color: var(--err); background: var(--err-soft); }
+
+.slider { display: flex; align-items: center; gap: 12px; }
+.slider span { font-size: 14px; color: var(--muted); }
+.slider input { accent-color: var(--green); width: 170px; max-width: 42vw; }
+.slider output { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); min-width: 32px; }
+.slider.off { opacity: .42; pointer-events: none; }
+
+/* What the result will actually weigh, measured rather than guessed. */
+.est {
+  font-size: 13.5px; font-weight: 580;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-hover);
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  padding: 6px 12px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.est.working { color: var(--muted); background: var(--surface-sunk); border-color: var(--line); font-weight: 500; }
+
+.note { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); }
+.note code {
+  background: var(--surface-sunk); border: 1px solid var(--line);
+  padding: 1px 6px; border-radius: 6px; font-size: 12.5px;
+}
+
+.banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-line);
+  border-radius: var(--radius);
+  padding: 15px 18px;
+  margin-top: 22px;
+  font-size: 14px;
+  color: #6f5115;
+}
+.banner b { color: #533c0c; }
+.banner-icon { font-size: 17px; line-height: 1; }
+.banner a { color: var(--green-hover); }
+
+/* ------------------------------------------------------------------- files */
+
+.files { margin-top: 22px; }
+.files-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 10px; }
+.files-head h2 { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.files-head span { font-size: 13px; color: var(--muted); }
+
 ul { list-style: none; margin: 0; padding: 0; }
-li { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; margin-bottom: 8px; }
+li.file {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 9px;
+  box-shadow: var(--shadow);
+}
 
 .thumb {
-  width: 46px; height: 46px; flex: none; border-radius: 7px;
-  background: var(--thumb-bg); border: 1px solid var(--line);
-  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  width: 44px; height: 44px; flex: none;
+  border-radius: 10px;
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  display: grid; place-items: center;
+  font-size: 9.5px; font-weight: 700; color: var(--muted); letter-spacing: .04em;
+  overflow: hidden;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.thumb .ext { font-size: 9.5px; font-weight: 650; color: var(--muted); letter-spacing: .04em; }
 .thumb.clickable { cursor: zoom-in; }
 
-.info { flex: 1; min-width: 0; }
-.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
-.sub2 { font-size: 12.5px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
-.sub2.err { color: var(--err); }
-.sub2.warn { color: var(--warn); }
-.sub2 .arrow { opacity: .6; padding: 0 3px; }
+.meta { flex: 1; min-width: 0; }
+.meta .name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.meta .sub.err { color: var(--err); }
+.meta .sub.warn { color: var(--amber); }
+.sub .to { opacity: .55; padding: 0 5px; }
+.sub .est-inline { color: var(--green-hover); font-weight: 580; }
 
-.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+.spinner {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--green);
+  animation: spin .7s linear infinite;
+}
 @keyframes spin { to { transform: rotate(360deg); } }
 
-button.dl, .btn {
-  border: 1px solid var(--line); background: var(--card); color: var(--text);
-  font: inherit; font-size: 13px; padding: 6px 13px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+.dl {
+  appearance: none;
+  border: 1px solid var(--green); background: var(--surface); color: var(--green-hover);
+  font: inherit; font-size: 13px; font-weight: 580;
+  padding: 8px 15px; border-radius: 10px; cursor: pointer; white-space: nowrap;
 }
-button.dl { border-color: var(--accent); color: var(--accent); font-weight: 550; }
-button.dl:hover, .btn:hover { background: var(--accent-soft); }
-.remove {
-  border: 0; background: none; color: var(--muted); cursor: pointer;
-  font-size: 17px; line-height: 1; padding: 4px 6px; border-radius: 6px; flex: none;
+.dl:hover { background: var(--green-soft); }
+.ghost {
+  appearance: none;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+  font: inherit; font-size: 13px;
+  padding: 8px 15px; border-radius: 10px; cursor: pointer; white-space: nowrap;
 }
-.remove:hover { background: var(--accent-soft); color: var(--err); }
-
-.actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
-.actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 9px 20px; font-size: 14px; }
-.actions .primary:hover:not(:disabled) { opacity: .9; }
-.actions .primary:disabled { opacity: .4; cursor: default; }
-.hidden { display: none !important; }
-.muted { color: var(--muted); }
-
-/* The note about what this build cannot do, and where to get it */
-.aside {
-  margin-top: 30px; background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 16px 18px; font-size: 13px; color: var(--muted);
+.ghost:hover { background: var(--surface-sunk); }
+.x {
+  appearance: none; border: 0; background: none; color: var(--muted);
+  font-size: 19px; line-height: 1; padding: 5px 7px; border-radius: 8px; cursor: pointer; flex: none;
 }
-.aside strong { color: var(--text); font-weight: 600; }
-.aside a { color: var(--accent); }
-.aside p { margin: 0; }
-.aside p + p { margin-top: 7px; }
+.x:hover { background: var(--err-soft); color: var(--err); }
 
-footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 12px; }
+.actions { display: flex; gap: 11px; align-items: center; margin-top: 24px; flex-wrap: wrap; }
+.actions .cta { font-size: 16px; padding: 14px 32px; }
 
-/* Phones: the drop zone and rows need the room more than the padding */
-@media (max-width: 520px) {
-  body { padding: 24px 16px 48px; }
-  .dropzone { padding: 28px 16px; }
-  .options { gap: 12px; }
-  li { gap: 10px; padding: 9px 10px; }
-  .actions .primary { flex: 1; }
+/* ------------------------------------------------------------------ footer */
+
+footer {
+  max-width: 760px; margin: 0 auto;
+  padding: 0 24px 60px;
+  text-align: center; color: var(--muted); font-size: 13px;
+}
+footer .rule { height: 1px; background: var(--line); margin: 0 0 22px; }
+
+/* -------------------------------------------------------------- responsive */
+
+@media (max-width: 1080px) {
+  .promise .said-full { display: none; }
+  .promise .said-short { display: inline; }
+}
+@media (max-width: 860px) {
+  /* No room for both; the nav wins, and the footer still says it. */
+  .promise-wrap { display: none; }
+}
+@media (max-width: 760px) {
+  .bar { gap: 14px; padding: 0 16px; height: 62px; }
+  main { padding: 44px 16px 60px; }
+  footer { padding: 0 16px 48px; }
+  .drop { padding: 38px 18px; }
+  .drop .cta { width: 100%; }
+  .panel { padding: 18px 16px; }
+  li.file { gap: 11px; padding: 10px 11px; }
+  .actions .cta { flex: 1; }
 }
