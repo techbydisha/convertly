@@ -464,6 +464,13 @@ function fillRowTool(item) {
   }
 
   if (current === 'edit') {
+    // The word before the box, so the box cannot be read the wrong way round.
+    // "2-4" sitting on its own is just as readable as "keep these".
+    const label = document.createElement('span');
+    label.className = 'drop-label';
+    label.textContent = 'drop';
+    box.appendChild(label);
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'field pages-field';
