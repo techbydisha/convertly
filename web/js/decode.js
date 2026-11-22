@@ -10,6 +10,7 @@
 // actually produces, and it costs no download at all.
 
 import { extOf } from './kinds.js';
+import { sandboxedWorker } from './worker.js';
 
 export class DecodeError extends Error {}
 
@@ -21,7 +22,8 @@ const pending = new Map();
 
 function heifWorker() {
   if (worker === null) {
-    worker = new Worker(new URL('./heif-worker.js', import.meta.url), { type: 'module' });
+    // Through the blob wrapper, so libheif runs under the page's connect-src 'none'.
+    worker = sandboxedWorker('./heif-worker.js');
     worker.onmessage = (event) => {
       const { id, error, ...rest } = event.data;
       const entry = pending.get(id);

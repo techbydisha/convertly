@@ -23,8 +23,12 @@ one, and compressing one by re-encoding the photographs inside it. The engine
 is a port of `pdfedit.py`, and its output is checked byte-for-byte against the
 original.
 
-**Not yet:** turning a PDF into images, and TIFF. Word documents are not
-coming — Quick Look has no browser equivalent.
+**PDF → image works**, drawn by pdf.js: the first page, as on the Mac, with
+a note saying how many pages the PDF has. Every page appears in the review
+pane, so a PDF can be checked by looking at it.
+
+**Not yet:** TIFF. Word documents are not coming — Quick Look has no browser
+equivalent.
 
 ## How your files stay yours
 
@@ -37,6 +41,15 @@ picture anywhere, because the capability is not there to misuse.
 That is only possible because the HEIC decoder's WebAssembly is inlined into
 its module rather than fetched at runtime. It costs about half a megabyte more
 to download and buys an absolute guarantee instead of a careful promise.
+
+**Workers need care, and get it.** A policy set in a `<meta>` tag covers the
+page, but a worker loaded from its own URL takes its policy from *its own*
+response headers — and GitHub Pages sends none. Such a worker can `fetch`
+freely while the page cannot; this was measured, not assumed. So no code here
+calls `new Worker(url)` directly. `js/worker.js` starts each one from a
+`blob:` URL whose only line imports the real module, and a `blob:` worker
+inherits the policy of the page that made it. The HEIC decoder and pdf.js both
+run that way, and CI fails any other `new Worker`.
 
 Three other things follow from the same idea:
 
@@ -52,12 +65,24 @@ Three other things follow from the same idea:
 The deploy workflow re-checks all of this and refuses to publish if any of it
 has been weakened.
 
-## The same interface, twice
+## One interface, two engines
 
-`src/convertly/web/index.html` is this page with its stylesheet inlined and a
-different script: same markup, same wording, same five tools. The macOS copy
-posts each job to its local server, which has `sips`, Quick Look and Word to
-call on; this one does the work in the page. Change one and change the other.
+The macOS app serves **this directory** — the same `index.html`, the same
+`css/` and `js/` — so there is one interface to change, not two. What differs
+is who does the work:
+
+- `js/backend-local.js` does it in the page (this build).
+- `js/backend-server.js` posts it to the Mac's local server, which has `sips`,
+  Quick Look and Word to call on.
+
+`ui.js` loads one or the other. The Mac's server marks its copy of the page
+with `<meta name="convertly-backend" content="server">`, and swaps this page's
+`<meta>` policy for its own header (the same rules, except `connect-src
+'self'`, so the page can reach that server and nothing else).
+
+The flow is the same on both: drop files, pick settings, press the green
+button, then **review** the result in the side panel — every page of a PDF,
+original beside result for a picture — and only then download.
 
 ## How it differs from the macOS app
 
@@ -65,7 +90,8 @@ call on; this one does the work in the page. Change one and change the other.
 | --- | --- | --- |
 | Images | `sips` | the browser's own decoder, or libheif (WebAssembly) for HEIC |
 | iWork files | the preview inside the document | the same, read with `DecompressionStream` |
-| PDF → image | Quick Look, first page only | not yet — will be pdf.js, **every** page |
+| PDF → image | Quick Look, first page | pdf.js, first page |
+| Page thumbnails and review | pdf.js in the page | pdf.js |
 | PDF pages / joining | `pdfedit.py` | the same engine, ported — byte-identical output |
 | Decompression | `zlib` | `js/inflate.js`, because the browser's is asynchronous |
 | Word documents | Quick Look | **not supported** — no browser equivalent |
@@ -90,7 +116,11 @@ web/
 ├── css/app.css         the look, shared with the macOS app's interface
 ├── js/
 │   ├── app.js          entry point; refuses to run inside a frame
-│   ├── ui.js           the interface
+│   ├── ui.js           the interface, shared with the macOS app
+│   ├── backend-local.js   the work done in the page
+│   ├── backend-server.js  the work posted to the Mac's server
+│   ├── render.js       PDF pages as pictures, via pdf.js
+│   ├── worker.js       the one way to start a worker (see above)
 │   ├── convert.js      one file in, one file out -- mirrors convert()
 │   ├── decode.js       pixels, natively or via the worker
 │   ├── heif-worker.js  libheif, off the main thread
@@ -117,6 +147,20 @@ python3 -m http.server -d web 8000
 Then open `http://localhost:8000`. Opening `index.html` as a file will not
 work: ES modules and workers need a real origin. Note that the CSP is stricter
 than the local app's, so a mistake that reaches for the network fails loudly.
+
+`http.server` lets the browser cache modules, so after editing a file a reload
+can run the old one against new markup. Use a hard reload, or the
+`browser build (no cache)` entry in `.claude/launch.json`, which sends
+`Cache-Control: no-store`.
+
+## Deploying
+
+`pages.yml` publishes a copy of this directory, not the directory itself: in
+the copy, `.github/scripts/stamp_version.py` adds `?v=<commit>` to every
+script and stylesheet reference. GitHub Pages caches each file for about ten
+minutes on its own, so without that a visitor just after a deploy could get
+the new `index.html` with an old `ui.js`, and a broken page. The source keeps
+plain names, which is what the Mac app serves.
 
 ## Tests
 
@@ -148,7 +192,7 @@ The macOS app has none, and that is enforced in CI. This build cannot make the
 same promise — decoding HEIC in a browser needs a WebAssembly library. The rule
 here is narrower:
 
-- Vendored into `vendor/`, committed, and served from this origin. No CDNs, no
+- Vendored into `vendor/` (libheif, pdf.js), committed, and served from this origin. No CDNs, no
   `npm install` at build time, no runtime downloads from anyone else.
 - Each library recorded in [`vendor/README.md`](vendor/README.md) with its
   version, licence and where it came from, and its hash checked in CI.

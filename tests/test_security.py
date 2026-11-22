@@ -117,6 +117,17 @@ class ResponseHeaders(unittest.TestCase):
         self.assertIn("connect-src 'self'", policy)
         self.assertIn("frame-ancestors 'none'", policy)
 
+    def test_no_inline_code_is_trusted(self):
+        """The shared page has no inline scripts or styles, so neither is allowed."""
+        _, headers, _ = self.server.request("GET", "/")
+        self.assertNotIn("unsafe-inline", headers["Content-Security-Policy"])
+        self.assertNotIn("unsafe-eval'", headers["Content-Security-Policy"].replace("wasm-unsafe-eval'", ""))
+
+    def test_workers_inherit_the_policy(self):
+        """blob: workers take this policy with them; see web/js/worker.js."""
+        _, headers, _ = self.server.request("GET", "/")
+        self.assertIn("worker-src 'self' blob:", headers["Content-Security-Policy"])
+
     def test_nothing_is_cached(self):
         _, headers, _ = self.server.request("GET", "/")
         self.assertEqual(headers.get("Cache-Control"), "no-store")
@@ -297,11 +308,18 @@ class NoNetworkCalls(unittest.TestCase):
                 self.assertEqual(unexpected, set(), f"unexpected imports: {unexpected}")
 
     def test_page_loads_no_remote_resources(self):
-        with open(os.path.join(ROOT, "src", "convertly", "web", "index.html")) as fh:
-            page = fh.read()
-        for smell in ("http://", "https://", "//cdn", "integrity="):
-            self.assertNotIn(smell, page,
-                             f"the UI must not reference {smell} -- it has to work offline")
+        """The interface both apps serve, and our own code behind it. Vendored
+        libraries are checked by hash in CI rather than by text."""
+        web = os.path.join(ROOT, "web")
+        files = [os.path.join(web, "index.html"), os.path.join(web, "css", "app.css")]
+        files += sorted(os.path.join(web, "js", n) for n in os.listdir(os.path.join(web, "js")))
+        for path in files:
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            for smell in ("http://", "https://", "//cdn", "integrity="):
+                with self.subTest(file=os.path.relpath(path, ROOT), smell=smell):
+                    self.assertNotIn(smell, text,
+                                     f"the UI must not reference {smell} -- it has to work offline")
 
 
 class NoSecretsInRepo(unittest.TestCase):

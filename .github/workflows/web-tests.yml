@@ -14,11 +14,13 @@ on:
       - 'web/**'
       - 'shared/**'
       - '.github/workflows/web-tests.yml'
+      - '.github/scripts/**'
   pull_request:
     paths:
       - 'web/**'
       - 'shared/**'
       - '.github/workflows/web-tests.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 permissions:
@@ -54,7 +56,33 @@ jobs:
         run: |
           # A tampered or truncated decoder is the one dependency that could
           # quietly betray the privacy promise, so its hash is pinned.
-          echo "095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9  web/vendor/libheif/libheif-bundle.mjs" | sha256sum -c -
+          # The same goes for pdf.js, which reads every PDF dropped on the page.
+          sha256sum -c - <<'SUMS'
+          095194187be00d3e36335b8ad7f5552d70655e5e2159486d7d36cd4daa47bba9  web/vendor/libheif/libheif-bundle.mjs
+          3a88402882cfa3e7e72c2c9b5149f52f0f88baf1c5b62aa11a41abdbc2072440  web/vendor/pdfjs/pdf.min.mjs
+          1e64c8240e54735ec5913b37acd5134747799cb8c6bb3777c70adbc01232d2aa  web/vendor/pdfjs/pdf.worker.min.mjs
+          SUMS
+
+      - name: Every worker must start under the page's policy
+        run: |
+          # A worker loaded from its own URL does not inherit the page's
+          # <meta> CSP, so it could reach the network even though the page
+          # cannot. worker.js starts workers through a blob: wrapper that does
+          # inherit it; nothing else may call new Worker or SharedWorker.
+          if grep -rnE 'new (Shared)?Worker\(' web/js web/index.html | grep -v '^web/js/worker.js:'; then
+            echo "::error::start workers with sandboxedWorker() from web/js/worker.js"
+            exit 1
+          fi
+          echo "ok"
+
+      - name: The deploy's cache stamp still finds what it must
+        run: |
+          cp -R web "$RUNNER_TEMP/site"
+          python3 .github/scripts/stamp_version.py "$RUNNER_TEMP/site" test123
+          if grep -rnE "[\"']\.{1,2}/[^\"'?]+\.m?js[\"']" "$RUNNER_TEMP/site/js"; then
+            echo "::error::a script reference escaped the version stamp"
+            exit 1
+          fi
 
       - name: Nothing in web/ may reach off-origin
         run: |

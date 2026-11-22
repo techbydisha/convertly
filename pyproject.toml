@@ -33,8 +33,15 @@ classifiers = [
 [project.scripts]
 convertly = "convertly.server:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# The interface lives once, in web/ at the top of the repository: GitHub Pages
+# publishes it as is, and the macOS app's server serves the same files. The
+# package carries it as convertly.site, so `pip install .` gets it too.
+[tool.setuptools]
+packages = ["convertly", "convertly.site"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+"convertly.site" = "web"
 
 [tool.setuptools.package-data]
-convertly = ["web/*.html"]
+"convertly.site" = ["index.html", "css/*.css", "js/*.js", "vendor/*/*"]

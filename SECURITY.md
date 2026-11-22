@@ -46,6 +46,28 @@ Nothing in it is designed for that.
 
 These are covered by `tests/test_security.py`; see [docs/TESTING.md](docs/TESTING.md).
 
+### The browser build
+
+The hosted page has no server to protect, so its defence is the opposite one:
+it cannot send anything. Its `<meta>` Content Security Policy sets
+`connect-src 'none'`, which the browser enforces for `fetch`, XHR, WebSockets
+and beacons; `web/README.md` explains the rest.
+
+One gap was found and closed while adding pdf.js. **A worker started from its
+own URL does not inherit a `<meta>` policy** — it takes the policy of its own
+HTTP response, and GitHub Pages sends none — so code in such a worker could
+reach the network while the page could not. The HEIC decoder had run that way
+since it shipped. It made no requests (it was reviewed, and it is pinned by
+hash), but the claim that the browser *enforced* the guarantee was not true of
+worker code. Every worker now starts from a `blob:` URL that imports the real
+module, and a `blob:` worker does inherit the page's policy; this was checked by
+having one try to `fetch` and watching it be refused. CI fails any `new Worker`
+outside `web/js/worker.js`.
+
+The macOS app serves the same page with the same rules as an HTTP header,
+where the only change is `connect-src 'self'`, so the page can reach the local
+server and nowhere else.
+
 ### Known limitations
 
 - Anything running as your user on your machine can reach the local port while

@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convertly — review prototype</title>
+<!--
+  A PROTOTYPE for four usability changes. Not deployed: pages.yml publishes
+  web/ only.
+
+  It runs on the real engine (web/js/), so conversions, merges, page removal
+  and PDF compression genuinely happen and the downloads are real files. The
+  one thing faked is the *drawing* of PDF pages: a browser needs a renderer
+  for that (pdf.js), which is not vendored yet. Stand-in pages carry the real
+  page numbers and the real order, so the flow can be judged honestly.
+
+  Serve from the repository root so ../../web/js resolves:
+    python3 -m http.server 8010
+  then open http://localhost:8010/docs/design/review-prototype.html
+-->
+<style>
+  :root {
+    --bg: #f7f4ee; --surface: #fff; --sunk: #fbf9f5;
+    --ink: #19181a; --ink-soft: #4a463f; --muted: #726c62; --faint: #938d82;
+    --line: #e7e1d7; --line-strong: #d8d0c2;
+    --green: #16874a; --green-hover: #0f6b3a; --green-soft: #e9f3ec; --green-line: #bcdcc7;
+    --err: #b4392f; --err-soft: #f9ebe9;
+    --radius: 18px;
+    --shadow: 0 1px 2px rgba(25,24,26,.04), 0 8px 24px rgba(25,24,26,.05);
+    --shadow-lift: 0 2px 6px rgba(25,24,26,.06), 0 24px 60px rgba(25,24,26,.14);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  .hidden { display: none !important; }
+  button { font: inherit; }
+
+  /* header -------------------------------------------------------------- */
+  header { position: sticky; top: 0; z-index: 20; background: rgba(247,244,238,.88);
+    backdrop-filter: saturate(1.4) blur(12px); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1180px; margin: 0 auto; padding: 0 24px; height: 64px;
+    display: flex; align-items: center; gap: 26px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 19px;
+    font-weight: 660; letter-spacing: -.02em; flex: none; }
+  .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--green);
+    display: grid; place-items: center; }
+  .mark svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.2; }
+  nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: none; }
+  nav button { border: 0; background: none; color: var(--muted); font-size: 14.5px;
+    font-weight: 520; padding: 8px 14px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
+  nav button:hover { background: rgba(25,24,26,.05); color: var(--ink); }
+  nav button[aria-current="true"] { background: var(--green-soft); color: var(--green-hover); font-weight: 600; }
+  .promise { font-size: 13px; color: var(--ink-soft); border: 1px solid var(--line);
+    background: var(--surface); padding: 7px 14px; border-radius: 999px; flex: none; font-weight: 560; }
+
+  /* empty state ----------------------------------------------------------- */
+  .empty { max-width: 760px; margin: 0 auto; padding: 64px 24px 80px; text-align: center; }
+  .empty h1 { margin: 0; font-size: clamp(38px, 6.4vw, 56px); letter-spacing: -.035em; font-weight: 680; line-height: 1.04; }
+  .empty .blurb { margin: 14px auto 36px; max-width: 30em; font-size: 17px; color: var(--muted); }
+  .drop { background: var(--surface); border: 2px dashed var(--line-strong); border-radius: 24px;
+    padding: 52px 28px; box-shadow: var(--shadow); transition: all .18s; }
+  .drop.over { border-color: var(--green); background: var(--green-soft); transform: translateY(-2px); }
+  .drop svg { width: 44px; height: 44px; stroke: var(--green); fill: none; stroke-width: 1.7; display: block; margin: 0 auto 20px; }
+  .drop .hint { margin-top: 15px; font-size: 14px; color: var(--muted); }
+  .drop .types { margin-top: 5px; font-size: 12.5px; color: var(--faint); }
+  .samples { margin-top: 18px; background: none; border: 0; color: var(--green-hover);
+    font-size: 14px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+  .cta { border: 0; background: var(--green); color: #fff; font-size: 16px; font-weight: 600;
+    padding: 14px 32px; border-radius: 13px; cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15,107,58,.3), 0 10px 22px -8px rgba(15,107,58,.5); transition: background .15s, transform .12s; }
+  .cta:hover:not(:disabled) { background: var(--green-hover); transform: translateY(-1px); }
+  .cta:disabled { background: #c6c1b8; box-shadow: none; cursor: default; }
+  .cta.big { font-size: 17px; padding: 16px 40px; }
+  .ghost { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft);
+    font-size: 13.5px; padding: 8px 15px; border-radius: 10px; cursor: pointer; white-space: nowrap; }
+  .ghost:hover { background: var(--sunk); }
+
+  /* workspace -------------------------------------------------------------- */
+  .work { max-width: 1180px; margin: 0 auto; padding: 28px 24px 90px;
+    display: grid; grid-template-columns: minmax(340px, 420px) 1fr; gap: 28px; align-items: start;
+    animation: rise .35s ease; }
+  /* No fill mode, deliberately: an animation that keeps applying opacity or
+     transform makes this element a stacking context, which traps the pop-up
+     beneath its own backdrop. Once it has played, it must leave nothing behind. */
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  body.review-modal .work, body.narrow .work { grid-template-columns: minmax(0, 560px); justify-content: center; }
+
+  .work-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 2px 16px; }
+  .work-head h1 { margin: 0; font-size: 30px; letter-spacing: -.03em; font-weight: 680; }
+
+  .list { list-style: none; margin: 0 0 18px; padding: 0; }
+  .row { display: flex; align-items: center; gap: 13px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 8px;
+    box-shadow: var(--shadow); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .row:hover { border-color: var(--line-strong); }
+  .row.selected { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+  .row.fresh { animation: fresh 1.6s ease; }
+  @keyframes fresh { 0% { background: var(--green-soft); transform: translateX(-6px); }
+                     20% { transform: none; } 100% { background: var(--surface); } }
+  .thumb { width: 46px; height: 46px; flex: none; border-radius: 9px; overflow: hidden;
+    background: var(--sunk); border: 1px solid var(--line); display: grid; place-items: center; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.page img { object-fit: contain; background: #efeae1; padding: 3px; }
+  .meta { flex: 1; min-width: 0; }
+  .name { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sub .ok { color: var(--green-hover); font-weight: 580; }
+  .sub.err { color: var(--err); }
+  .arrows { display: flex; flex-direction: column; gap: 3px; }
+  .arrows button { border: 1px solid var(--line); background: var(--surface); color: var(--muted);
+    border-radius: 6px; font-size: 9px; padding: 3px 7px; cursor: pointer; }
+  .arrows button:disabled { opacity: .3; cursor: default; }
+  .x { border: 0; background: none; color: var(--muted); font-size: 19px; line-height: 1;
+    padding: 5px 7px; border-radius: 8px; cursor: pointer; }
+  .x:hover { background: var(--err-soft); color: var(--err); }
+  .srcdot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .panel-label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 650;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 14px; font-weight: 520; padding: 8px 15px; border-radius: 10px;
+    border: 1px solid var(--line-strong); background: var(--sunk); color: var(--ink-soft); cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--green-soft); border-color: var(--green); color: var(--green-hover); font-weight: 620; }
+  .slider { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+  .slider input { accent-color: var(--green); flex: 1; max-width: 200px; }
+  .slider output { font-size: 14px; color: var(--muted); min-width: 30px; font-variant-numeric: tabular-nums; }
+  .field { font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px;
+    border: 1px solid var(--line-strong); background: var(--sunk); color: var(--ink); width: 100%; }
+  .field:focus { outline: none; border-color: var(--green); background: #fff; }
+  .field.bad { border-color: var(--err); background: var(--err-soft); }
+  .field-row { display: flex; align-items: center; gap: 10px; }
+  .field-row .drop-word { font-size: 13px; color: var(--muted); flex: none; }
+  .err-line { font-size: 12.5px; color: var(--err); margin-top: 6px; min-height: 1em; }
+  .quiet { font-size: 13px; color: var(--muted); margin: 0; }
+
+  /* the ⓘ -- detail for whoever wants it, out of the way of everyone else */
+  .info { position: relative; display: inline-flex; }
+  .info > button { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 700; font-style: italic;
+    font-family: Georgia, serif; line-height: 1; padding: 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .info > button:hover, .info.open > button { border-color: var(--green); color: var(--green-hover); background: var(--green-soft); }
+  .info .tip { display: none; position: absolute; left: -8px; top: calc(100% + 8px); width: 270px; z-index: 30;
+    background: var(--ink); color: #f3f0ea; border-radius: 12px; padding: 12px 14px;
+    font-size: 13px; line-height: 1.5; font-weight: 400; letter-spacing: 0; text-transform: none;
+    box-shadow: var(--shadow-lift); }
+  .info.open .tip { display: block; }
+  .tip code { background: rgba(255,255,255,.12); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .tip table { border-collapse: collapse; margin-top: 4px; }
+  .tip td { padding: 2px 10px 2px 0; vertical-align: top; }
+
+  .actions { display: flex; gap: 10px; align-items: center; }
+  .actions .cta { flex: 1; }
+  /* Finished: not a dead grey button, but a pointer to where the result is. */
+  .done-note { flex: 1; display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    border-radius: 13px; background: var(--green-soft); border: 1px solid var(--green-line);
+    color: var(--green-hover); font-size: 14px; font-weight: 560; }
+  .done-note .tick { width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff;
+    display: grid; place-items: center; font-size: 12px; flex: none; }
+
+  /* review pane -------------------------------------------------------------- */
+  /* The pane never grows past the window, so its footer -- where Download
+     lives -- is always on screen. The stage scrolls instead. */
+  .review { position: sticky; top: 88px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: 22px; box-shadow: var(--shadow); display: flex; flex-direction: column;
+    min-height: min(620px, calc(100vh - 110px)); max-height: calc(100vh - 110px); overflow: hidden; }
+  .review-head, .strip, .foot { flex: none; }
+  .review-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+    border-bottom: 1px solid var(--line); }
+  .review-title { font-weight: 620; font-size: 15px; flex: 1; }
+  .seg { display: inline-flex; background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 5px 12px;
+    border-radius: 7px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .seg button:disabled { opacity: .4; cursor: default; }
+  .close { display: none; }
+  body.review-modal .close, body.narrow .close { display: inline-block; }
+
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; gap: 14px;
+    padding: 22px; background: #efeae1; min-height: 0; overflow: auto; position: relative; }
+  .stage .frame { max-width: calc(100% - 108px); max-height: 460px; min-width: 0; box-shadow: 0 4px 22px rgba(25,24,26,.18);
+    border-radius: 3px; background: #fff; display: block; }
+  .stage .frame.photo { border-radius: 6px; }
+  .nav-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-strong);
+    background: rgba(255,255,255,.92); color: var(--ink); font-size: 20px; cursor: pointer; flex: none;
+    box-shadow: var(--shadow); }
+  .nav-btn:disabled { opacity: .25; cursor: default; }
+  .caption { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+    background: rgba(25,24,26,.78); color: #fff; font-size: 12.5px; padding: 4px 11px; border-radius: 999px;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Edit: pick pages by clicking them */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px;
+    width: 100%; align-self: flex-start; }
+  .tile { position: relative; cursor: pointer; border-radius: 6px; transition: transform .12s; }
+  .tile:hover { transform: translateY(-2px); }
+  .tile img { width: 100%; display: block; border-radius: 4px; box-shadow: 0 2px 10px rgba(25,24,26,.15); background: #fff; }
+  .tile .num { text-align: center; font-size: 12px; color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .tile.dropped img { opacity: .28; filter: grayscale(1); }
+  .tile.dropped::after { content: "✕"; position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%);
+    width: 36px; height: 36px; border-radius: 50%; background: var(--err); color: #fff;
+    display: grid; place-items: center; font-size: 17px; font-weight: 700; box-shadow: 0 4px 12px rgba(180,57,47,.4); }
+  .tile.dropped .num { color: var(--err); font-weight: 600; }
+
+  .strip { display: flex; gap: 8px; padding: 12px 16px; overflow-x: auto; border-top: 1px solid var(--line); }
+  .strip img { height: 64px; border-radius: 3px; border: 2px solid transparent; cursor: pointer; flex: none;
+    background: #fff; box-shadow: 0 1px 4px rgba(25,24,26,.12); }
+  .strip img.on { border-color: var(--green); }
+  .strip img.photo { width: 64px; object-fit: cover; border-radius: 6px; }
+
+  .foot { padding: 16px; border-top: 1px solid var(--line); display: flex; gap: 10px; align-items: center; }
+  .foot .cta { flex: 1; }
+  .foot .wait { flex: 1; text-align: center; font-size: 14px; color: var(--muted); padding: 10px; }
+  .foot .facts { font-size: 13px; color: var(--muted); }
+
+  /* the same pane as a pop-up, and always one on a phone */
+  .backdrop { position: fixed; inset: 0; background: rgba(25,24,26,.42); z-index: 40; display: none; }
+  body.review-modal .review, body.narrow .review {
+    position: fixed; z-index: 50; left: 50%; top: 4vh; transform: translateX(-50%);
+    width: min(780px, 94vw); max-height: 92vh; min-height: 0; display: none; box-shadow: var(--shadow-lift); }
+  body.review-modal .review.open, body.narrow .review.open { display: flex; }
+  body.review-modal .backdrop.open, body.narrow .backdrop.open { display: block; }
+  body.narrow .review { top: auto; bottom: 0; width: 100vw; border-radius: 22px 22px 0 0; max-height: 94vh; }
+  .peek { display: none; }
+  body.review-modal .peek, body.narrow .peek { display: inline-flex; }
+
+  /* upload feedback */
+  .toast { position: fixed; top: 80px; left: 50%; transform: translate(-50%, -20px); opacity: 0;
+    background: var(--ink); color: #fff; padding: 10px 18px 10px 14px; border-radius: 999px;
+    font-size: 14px; z-index: 60; transition: all .25s; display: flex; gap: 8px; align-items: center;
+    box-shadow: var(--shadow-lift); pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .tick { width: 20px; height: 20px; border-radius: 50%; background: var(--green);
+    display: grid; place-items: center; font-size: 12px; }
+  .add-strip { display: flex; align-items: center; gap: 10px; margin: -4px 0 18px;
+    padding: 13px 16px; border: 1.5px dashed var(--line-strong); border-radius: 14px;
+    background: transparent; color: var(--muted); font-size: 13.5px; cursor: pointer;
+    transition: all .16s; }
+  .add-strip:hover { border-color: var(--green-line); background: var(--surface); color: var(--ink-soft); }
+  .add-strip b { color: var(--ink-soft); font-weight: 600; }
+  .add-strip .plus { width: 24px; height: 24px; border-radius: 50%; background: var(--green-soft);
+    color: var(--green-hover); display: grid; place-items: center; font-size: 16px; font-weight: 600; flex: none; }
+  .add-strip .add-drop { display: none; }
+  /* While files are being dragged over the page, the strip says where they go. */
+  body.dragging .add-strip { border-color: var(--green); border-style: solid; background: var(--green-soft);
+    padding: 22px 16px; box-shadow: 0 0 0 4px rgba(22,135,74,.12); }
+  body.dragging .add-strip .add-idle { display: none; }
+  body.dragging .add-strip .add-drop { display: inline; color: var(--green-hover); }
+  body.dragging .add-strip b { color: var(--green-hover); }
+  body.dragging .add-strip .plus { background: var(--green); color: #fff; }
+
+  /* prototype-only controls */
+  .proto { position: fixed; right: 16px; bottom: 16px; z-index: 80; background: var(--ink); color: #fff;
+    border-radius: 14px; padding: 10px 12px; font-size: 12.5px; display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  .proto .seg { background: rgba(255,255,255,.1); border-color: transparent; }
+  .proto .seg button { color: #d8d4cc; font-size: 12px; }
+  .proto .seg button[aria-pressed="true"] { background: #fff; color: var(--ink); }
+  .proto small { color: #a9a49a; display: block; font-size: 11px; }
+
+  /* The menu matters more than the badge; the footer still says it. */
+  @media (max-width: 980px) { .promise { display: none; } }
+  @media (max-width: 760px) {
+    .bar { gap: 12px; padding: 0 16px; }
+    .work { padding: 20px 16px 120px; }
+    /* A phone is always a sheet, so the switch has nothing to switch. */
+    .proto { display: none; }
+  }
+</style>
+</head>
+<body class="review-side">
+
+<header>
+  <div class="bar">
+    <span class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 9h12M12 5l4 4-4 4"/><path d="M20 15H8M12 19l-4-4 4-4"/></svg></span>
+      Convertly
+    </span>
+    <nav id="nav">
+      <button data-tool="convert" aria-current="true">Convert</button>
+      <button data-tool="compress" aria-current="false">Compress</button>
+      <button data-tool="resize" aria-current="false">Resize</button>
+      <button data-tool="merge" aria-current="false">Merge</button>
+      <button data-tool="edit" aria-current="false">Edit</button>
+    </nav>
+    <span class="promise">🔒 Your files never leave this device</span>
+  </div>
+</header>
+
+<!-- 3. Empty: one big, obvious place to start. -->
+<section class="empty" id="empty">
+  <h1 id="title">Convert</h1>
+  <p class="blurb" id="blurb"></p>
+  <div class="drop" id="drop">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3"/></svg>
+    <button class="cta big" id="choose">Choose files</button>
+    <div class="hint">or drop them here</div>
+    <div class="types" id="types"></div>
+  </div>
+  <button class="samples" id="samples">or try it with sample files</button>
+</section>
+
+<!-- 3. With files: the page changes shape, so it is obvious they arrived. -->
+<section class="work hidden" id="work">
+  <div class="left">
+    <div class="work-head">
+      <h1 id="wtitle">Convert</h1>
+    </div>
+    <ul class="list" id="list"></ul>
+    <!-- Adding more is still drag and drop: a visible target, not just a button. -->
+    <div class="add-strip" id="addStrip" tabindex="0" role="button" aria-label="Add more files">
+      <span class="plus">+</span>
+      <span class="add-idle"><b>Add more</b> — drop files here, or click to choose</span>
+      <span class="add-drop"><b>Drop to add them</b></span>
+    </div>
+    <div class="panel" id="options"></div>
+    <div class="actions">
+      <div class="done-note hidden" id="doneNote"><span class="tick">✓</span><span id="doneText"></span></div>
+      <button class="cta" id="go">Convert</button>
+      <button class="ghost peek" id="peek">Preview</button>
+      <button class="ghost" id="reset">Start over</button>
+    </div>
+  </div>
+
+  <!-- 2. The review pane: check everything here, and download last. -->
+  <aside class="review" id="review">
+    <div class="review-head">
+      <span class="review-title" id="rtitle">Preview</span>
+      <div class="seg" id="viewSeg"></div>
+      <button class="x close" id="close" title="Close">&times;</button>
+    </div>
+    <div class="stage" id="stage"></div>
+    <div class="strip" id="strip"></div>
+    <div class="foot" id="foot"></div>
+  </aside>
+</section>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="toast" id="toast"><span class="tick">✓</span><span id="toastText"></span></div>
+<input type="file" id="picker" class="hidden" multiple>
+
+<div class="proto">
+  <div><b>Prototype</b><small>PDF pages are drawn as stand-ins</small></div>
+  <span>Review as</span>
+  <div class="seg" id="modeSeg">
+    <button data-mode="side" aria-pressed="true">Side panel</button>
+    <button data-mode="modal" aria-pressed="false">Pop-up</button>
+  </div>
+</div>
+
+<script type="module">
+import { convertFile } from '../../web/js/convert.js';
+import { build, buildWithout, pageCount, parseRanges, invertRanges, PdfError } from '../../web/js/pdfedit.js';
+import { humanSize, parseSize } from '../../web/js/sizes.js';
+import { removedName, COMBINED_NAME } from '../../web/js/naming.js';
+
+const $ = id => document.getElementById(id);
+const IMAGE_RE = /\.(heic|heif|png|jpe?g|gif|bmp|webp)$/i;
+const PDF_RE = /\.pdf$/i;
+const SOURCE_COLOURS = ['#16874a', '#c2643a', '#3f6fb5', '#9a6b1f', '#7a4bb3', '#b23a6e'];
+
+const TOOLS = {
+  convert:  { noun: 'pictures and PDFs', title: 'Convert',  action: 'Convert',        accept: f => IMAGE_RE.test(f) || PDF_RE.test(f),
+              blurb: 'Turn photos and documents into JPG, PNG or PDF.', types: 'HEIC · PNG · JPEG · GIF · BMP · WebP · PDF' },
+  compress: { noun: 'pictures and PDFs', title: 'Compress', action: 'Compress',       accept: f => IMAGE_RE.test(f) || PDF_RE.test(f),
+              blurb: 'Get a picture or a PDF under a size limit.', types: 'HEIC · PNG · JPEG · GIF · BMP · WebP · PDF' },
+  resize:   { noun: 'pictures', title: 'Resize',   action: 'Resize',         accept: f => IMAGE_RE.test(f),
+              blurb: 'Cap the longest edge, keeping the shape of the picture.', types: 'HEIC · PNG · JPEG · GIF · BMP · WebP' },
+  merge:    { noun: 'PDFs', title: 'Merge',    action: 'Merge into one', accept: f => PDF_RE.test(f),
+              blurb: 'Join PDFs into one document, in the order you choose.', types: 'PDF only' },
+  edit:     { noun: 'PDFs', title: 'Edit',     action: 'Remove pages',   accept: f => PDF_RE.test(f),
+              blurb: 'Take out the pages you do not want.', types: 'PDF only' },
+};
+
+const state = {
+  tool: 'convert',
+  files: [],          // { id, file, kind, thumb, pages, dropped:Set, colour, result }
+  selected: 0,
+  view: 'original',   // or 'result' / 'pick' / 'merged'
+  frame: 0,
+  merged: null,       // { blob, url, size }
+  opts: { format: 'jpg', quality: 85, target: 1_000_000, edge: 1600 },
+  busy: false,
+};
+let nextId = 1;
+
+// --- stand-in PDF pages ------------------------------------------------------
+// What pdf.js would render. They carry the real page number and the real
+// source document, which is what you need to check an order or a selection.
+
+const pageCache = new Map();
+function drawPage(w, { title, page, colour }) {
+  const key = `${w}|${title}|${page}|${colour}`;
+  if (pageCache.has(key)) return pageCache.get(key);
+  const h = Math.round(w * 792 / 612);
+  const c = document.createElement('canvas');
+  c.width = w * 2; c.height = h * 2;
+  const x = c.getContext('2d');
+  x.scale(2, 2);
+  x.fillStyle = '#fff'; x.fillRect(0, 0, w, h);
+  x.fillStyle = colour; x.fillRect(0, 0, w, Math.max(3, h * .022));
+  x.fillStyle = '#19181a';
+  x.font = `650 ${Math.max(7, w * .11)}px -apple-system, system-ui, sans-serif`;
+  x.fillText(String(page), w * .09, h * .16);
+  x.fillStyle = '#726c62';
+  x.font = `${Math.max(6, w * .05)}px -apple-system, system-ui, sans-serif`;
+  const label = title.length > 22 ? title.slice(0, 21) + '…' : title;
+  x.fillText(label, w * .09, h * .23);
+  x.fillStyle = '#e7e1d7';
+  for (let i = 0; i < 13; i++) {
+    const y = h * .31 + i * h * .046;
+    const len = i % 5 === 4 ? .42 : .82 - (i % 3) * .07;
+    x.fillRect(w * .09, y, w * len, Math.max(1.5, h * .011));
+  }
+  const url = c.toDataURL('image/png');
+  pageCache.set(key, url);
+  return url;
+}
+
+// --- adding files ------------------------------------------------------------
+
+async function add(list, { quiet = false } = {}) {
+  const tool = TOOLS[state.tool];
+  const ok = list.filter(f => tool.accept(f.name));
+  const skipped = list.length - ok.length;
+  const fresh = [];
+  for (const file of ok) {
+    const item = {
+      id: nextId++, file, kind: PDF_RE.test(file.name) ? 'pdf' : 'image',
+      thumb: null, pages: null, dropped: new Set(), error: null, result: null,
+      addedAt: performance.now(),
+      colour: SOURCE_COLOURS[state.files.length % SOURCE_COLOURS.length],
+    };
+    state.files.push(item);
+    fresh.push(item);
+  }
+  if (!ok.length) {
+    if (skipped) toast(`${tool.title} works on ${tool.noun} — ${skipped === 1 ? 'that file was' : `${skipped} files were`} skipped`, true);
+    return;
+  }
+  clearResults();
+  if (state.files.length === fresh.length) state.selected = 0;
+  showWorkspace();
+  renderList(fresh.map(f => f.id));
+  if (!quiet) {
+    toast(`${fresh.length} file${fresh.length > 1 ? 's' : ''} added` +
+          (skipped ? ` · ${skipped} skipped — ${tool.title} works on ${tool.noun}` : ''));
+  }
+  // Details arrive as they are read; the rows are already on screen.
+  for (const item of fresh) {
+    if (item.kind === 'image') {
+      item.thumb = URL.createObjectURL(item.file);
+    } else {
+      try {
+        item.pages = pageCount(new Uint8Array(await item.file.arrayBuffer()));
+        item.thumb = drawPage(120, { title: item.file.name, page: 1, colour: item.colour });
+      } catch (err) {
+        item.error = err instanceof PdfError ? err.message : "Couldn't read this PDF";
+      }
+    }
+    renderList();
+    renderReview();
+  }
+}
+
+function toast(text, warn = false) {
+  $('toastText').textContent = text;
+  $('toast').querySelector('.tick').textContent = warn ? '!' : '✓';
+  $('toast').querySelector('.tick').style.background = warn ? '#9a6b1f' : '';
+  $('toast').classList.add('show');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => $('toast').classList.remove('show'), 2400);
+}
+
+function showWorkspace() {
+  $('empty').classList.add('hidden');
+  $('work').classList.remove('hidden');
+}
+
+function startOver() {
+  state.files.forEach(f => {
+    if (f.kind === 'image' && f.thumb) URL.revokeObjectURL(f.thumb);
+    if (f.result?.url) URL.revokeObjectURL(f.result.url);
+  });
+  state.files = [];
+  clearResults();
+  closeReview();
+  $('work').classList.add('hidden');
+  $('empty').classList.remove('hidden');
+}
+
+// --- the left column --------------------------------------------------------
+
+function renderList(freshIds = []) {
+  const ul = $('list');
+  ul.innerHTML = '';
+  state.files.forEach((item, i) => {
+    const li = document.createElement('li');
+    li.className = 'row' + (i === state.selected && state.tool !== 'merge' ? ' selected' : '');
+    // Rows are rebuilt as thumbnails arrive. A fresh row keeps its highlight
+    // by resuming the animation where it had got to, instead of restarting it
+    // -- or losing it, which is what a plain class did.
+    const age = performance.now() - item.addedAt;
+    if (age < 1600) {
+      li.classList.add('fresh');
+      li.style.animationDelay = `${-age}ms`;
+    }
+    li.onclick = () => { state.selected = i; state.frame = 0; renderList(); renderReview(); openReview(); };
+
+    const t = document.createElement('div');
+    t.className = 'thumb' + (item.kind === 'pdf' ? ' page' : '');
+    if (item.thumb) t.innerHTML = `<img alt="" src="${item.thumb}">`;
+    li.appendChild(t);
+
+    if (state.tool === 'merge') {
+      const dot = document.createElement('span');
+      dot.className = 'srcdot'; dot.style.background = item.colour;
+      li.appendChild(dot);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const n = document.createElement('div'); n.className = 'name'; n.textContent = item.file.name;
+    const s = document.createElement('div'); s.className = 'sub';
+    if (item.error) { s.classList.add('err'); s.textContent = item.error; }
+    else {
+      const pages = item.kind === 'pdf'
+        ? (item.pages === null ? 'reading…' : `${item.pages} page${item.pages > 1 ? 's' : ''}`) + ' · '
+        : '';
+      s.textContent = pages + humanSize(item.file.size);
+      if (item.result) {
+        s.append(' → ');
+        const ok = document.createElement('span'); ok.className = 'ok';
+        ok.textContent = humanSize(item.result.size);
+        s.append(ok);
+      } else if (state.tool === 'edit' && item.dropped.size && item.pages) {
+        s.append(` · dropping ${item.dropped.size}, keeping ${item.pages - item.dropped.size}`);
+      }
+    }
+    meta.append(n, s);
+    li.appendChild(meta);
+
+    if (state.tool === 'merge' && state.files.length > 1) {
+      const a = document.createElement('div');
+      a.className = 'arrows';
+      [['▲', -1, i === 0], ['▼', 1, i === state.files.length - 1]].forEach(([g, d, off]) => {
+        const b = document.createElement('button');
+        b.textContent = g; b.disabled = off;
+        b.onclick = e => { e.stopPropagation(); move(i, d); };
+        a.appendChild(b);
+      });
+      li.appendChild(a);
+    }
+
+    const x = document.createElement('button');
+    x.className = 'x'; x.innerHTML = '&times;'; x.title = 'Remove';
+    x.onclick = e => {
+      e.stopPropagation();
+      state.files.splice(i, 1);
+      if (!state.files.length) return startOver();
+      state.selected = Math.min(state.selected, state.files.length - 1);
+      clearResults(); renderList(); renderReview();
+    };
+    li.appendChild(x);
+    ul.appendChild(li);
+  });
+  renderOptions();
+  renderGo();
+}
+
+function move(i, d) {
+  const j = i + d;
+  [state.files[i], state.files[j]] = [state.files[j], state.files[i]];
+  clearResults(); renderList(); renderReview();
+}
+
+// 4. Options say the minimum; the detail is one click away, for whoever wants it.
+function info(html) {
+  return `<span class="info"><button type="button" aria-label="More about this">i</button><span class="tip">${html}</span></span>`;
+}
+
+function renderOptions() {
+  const box = $('options');
+  const o = state.opts;
+  const sel = state.files[state.selected];
+  const chips = (name, values, current, fmt = v => v) => values.map(v =>
+    `<button class="chip" data-${name}="${v}" aria-pressed="${String(v) === String(current)}">${fmt(v)}</button>`).join('');
+
+  if (state.tool === 'convert') {
+    const lossless = o.format === 'png';
+    box.innerHTML = `
+      <div class="panel-label">Convert to ${info(`
+        <b>JPG</b> — best for photos.<br><b>PNG</b> — keeps every pixel; best for screenshots and logos, but larger.<br>
+        <b>PDF</b> — each picture on its own page.`)}</div>
+      <div class="chips">${chips('fmt', ['jpg', 'jpeg', 'png', 'pdf'], o.format, v => v.toUpperCase())}</div>
+      <div class="slider" style="${lossless ? 'opacity:.4;pointer-events:none' : ''}">
+        <span class="quiet">Quality</span>
+        <input type="range" min="40" max="100" step="5" value="${o.quality}" id="q">
+        <output>${lossless ? 'n/a' : o.quality}</output>
+        ${info('Lower quality, smaller file. Around 80 is invisible to the eye for photos. PNG has no quality setting — it keeps every pixel.')}
+      </div>`;
+  } else if (state.tool === 'compress') {
+    box.innerHTML = `
+      <div class="panel-label">Keep it under ${info(`
+        Quality is lowered first, so the picture keeps its size; it is only made smaller if that is not enough.
+        For a PDF, the photographs inside it are re-encoded — text stays exactly as it was.`)}</div>
+      <div class="chips">${chips('target', [200000, 500000, 1000000, 2000000, 5000000], o.target, v => humanSize(v).replace('.0 ', ' '))}</div>`;
+  } else if (state.tool === 'resize') {
+    box.innerHTML = `
+      <div class="panel-label">Longest edge ${info('The shape is always kept, and a picture is never made bigger than it is.')}</div>
+      <div class="chips">${chips('edge', [4000, 2500, 1600, 1200, 800], o.edge, v => v + ' px')}</div>`;
+  } else if (state.tool === 'merge') {
+    box.innerHTML = `
+      <div class="panel-label">Order ${info('Pages are joined top to bottom. Use the arrows to move a file, and check the result on the right before you merge.')}</div>
+      <p class="quiet">${state.files.length < 2 ? 'Add one more PDF to merge with.' : 'Top to bottom, as shown on the right.'}</p>`;
+  } else {
+    const spec = sel && sel.pages ? formatRanges([...sel.dropped]) : '';
+    box.innerHTML = `
+      <div class="panel-label">Pages to drop ${info(`
+        Easiest: <b>click the pages</b> on the right.<br>Or type them here:
+        <table><tr><td><code>3</code></td><td>page 3</td></tr>
+        <tr><td><code>2-4</code></td><td>pages 2, 3 and 4</td></tr>
+        <tr><td><code>1,7-9</code></td><td>page 1 and pages 7 to 9</td></tr>
+        <tr><td><code>5-</code></td><td>page 5 to the end</td></tr></table>`)}</div>
+      <div class="field-row"><span class="drop-word">drop</span>
+        <input class="field" id="spec" placeholder="click pages, or type e.g. 2-4" value="${spec}"></div>
+      <div class="err-line" id="specErr"></div>`;
+  }
+  wireOptions();
+}
+
+function wireOptions() {
+  const box = $('options');
+  box.querySelectorAll('.info > button').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const was = b.parentElement.classList.contains('open');
+    document.querySelectorAll('.info.open').forEach(i => i.classList.remove('open'));
+    if (!was) b.parentElement.classList.add('open');
+  });
+  box.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    if (c.dataset.fmt) state.opts.format = c.dataset.fmt;
+    if (c.dataset.target) state.opts.target = Number(c.dataset.target);
+    if (c.dataset.edge) state.opts.edge = Number(c.dataset.edge);
+    clearResults(); renderOptions(); renderList(); renderReview();
+  });
+  const q = $('q');
+  if (q) q.oninput = () => { state.opts.quality = Number(q.value); q.nextElementSibling.textContent = q.value; clearResults(); renderGo(); };
+  const spec = $('spec');
+  if (spec) spec.oninput = () => {
+    const sel = state.files[state.selected];
+    if (!sel || !sel.pages) return;
+    const text = spec.value.trim();
+    $('specErr').textContent = '';
+    spec.classList.remove('bad');
+    if (!text) { sel.dropped.clear(); }
+    else {
+      try {
+        const pages = parseRanges(text, sel.pages);
+        if (new Set(pages).size >= sel.pages) throw new PdfError('That would remove every page');
+        sel.dropped = new Set(pages);
+      } catch (err) {
+        spec.classList.add('bad');
+        $('specErr').textContent = err.message;
+        return;
+      }
+    }
+    clearResults(); renderListOnly(); renderReview();
+  };
+}
+
+function renderListOnly() {
+  // Re-render rows without rebuilding the options (keeps focus in the field).
+  const focus = document.activeElement?.id;
+  const pos = document.activeElement?.selectionStart;
+  renderList();
+  if (focus === 'spec') { const s = $('spec'); s.focus(); try { s.setSelectionRange(pos, pos); } catch {} }
+}
+
+function formatRanges(nums) {
+  nums.sort((a, b) => a - b);
+  const out = [];
+  for (let i = 0; i < nums.length; i++) {
+    let j = i;
+    while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    out.push(i === j ? `${nums[i]}` : `${nums[i]}-${nums[j]}`);
+    i = j;
+  }
+  return out.join(',');
+}
+
+function renderGo() {
+  const go = $('go');
+  const t = TOOLS[state.tool];
+  const usable = state.files.filter(f => !f.error);
+  const done = state.tool === 'merge' ? !!state.merged : usable.length && usable.every(f => f.result);
+  let why = null;
+  if (state.tool === 'merge' && usable.length < 2) why = 'Add another PDF';
+  if (state.tool === 'edit' && !usable.some(f => f.dropped.size)) why = 'Pick pages to drop';
+  // Finished. Beside a side panel, say where the result is. As a pop-up, the
+  // button reopens it -- that is where Download lives now.
+  const note = $('doneNote');
+  note.classList.toggle('hidden', !(done && !isModal()));
+  go.classList.toggle('hidden', !!(done && !isModal()));
+  if (done) {
+    $('doneText').textContent = 'Done — check the result on the right, then download.';
+    go.disabled = false;
+    go.textContent = 'Review & download';
+    go.dataset.review = '1';
+    return;
+  }
+  delete go.dataset.review;
+  go.disabled = state.busy || !!why;
+  go.textContent = state.busy ? 'Working…'
+    : why ? why
+    : `${t.action}${usable.length > 1 && state.tool !== 'merge' ? ` ${usable.length} files` : ''}`;
+}
+
+// --- the review pane --------------------------------------------------------
+
+function framesFor() {
+  const files = state.files.filter(f => !f.error);
+  if (state.tool === 'merge') {
+    // The merged document, live: what you will get, before you make it.
+    const frames = [];
+    files.forEach(f => {
+      for (let p = 1; p <= (f.pages || 0); p++) frames.push({ kind: 'page', title: f.file.name, page: p, colour: f.colour });
+    });
+    return frames;
+  }
+  const sel = state.files[state.selected];
+  if (!sel || sel.error) return [];
+  if (state.tool === 'edit') {
+    const kept = sel.pages ? [...Array(sel.pages).keys()].map(i => i + 1).filter(p => !sel.dropped.has(p)) : [];
+    return kept.map(p => ({ kind: 'page', title: sel.file.name, page: p, colour: sel.colour }));
+  }
+  // Convert / Compress / Resize: one frame per file, so the arrows walk
+  // through everything that was converted.
+  return files.map(f => {
+    const showResult = state.view === 'result' && f.result;
+    if (showResult && f.result.kind === 'image') return { kind: 'photo', url: f.result.url, file: f };
+    if (showResult && f.result.kind === 'pdf') return { kind: 'page', title: f.result.name, page: 1, colour: f.colour, file: f };
+    if (f.kind === 'image') return { kind: 'photo', url: f.thumb, file: f };
+    return { kind: 'page', title: f.file.name, page: 1, colour: f.colour, file: f };
+  });
+}
+
+function renderReview() {
+  const t = state.tool;
+  const seg = $('viewSeg');
+  const hasResult = t === 'merge' ? !!state.merged : state.files.some(f => f.result);
+
+  // Which views this tool has.
+  if (t === 'merge') {
+    seg.innerHTML = '';
+    $('rtitle').textContent = state.merged ? 'Merged document' : 'How it will be merged';
+  } else if (t === 'edit') {
+    if (!['pick', 'result'].includes(state.view)) state.view = 'pick';
+    seg.innerHTML = `<button data-v="pick" aria-pressed="${state.view === 'pick'}">Choose pages</button>
+                     <button data-v="result" aria-pressed="${state.view === 'result'}">What's left</button>`;
+    $('rtitle').textContent = '';
+  } else {
+    if (!['original', 'result'].includes(state.view)) state.view = 'original';
+    if (state.view === 'result' && !hasResult) state.view = 'original';
+    seg.innerHTML = `<button data-v="original" aria-pressed="${state.view === 'original'}">Original</button>
+                     <button data-v="result" aria-pressed="${state.view === 'result'}" ${hasResult ? '' : 'disabled'}>Result</button>`;
+    $('rtitle').textContent = '';
+  }
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => { state.view = b.dataset.v; state.frame = 0; renderReview(); });
+
+  const stage = $('stage');
+  stage.innerHTML = '';
+
+  // Edit, choosing: every page, click to drop.
+  if (t === 'edit' && state.view === 'pick') {
+    const sel = state.files[state.selected];
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    if (sel && sel.pages) {
+      for (let p = 1; p <= sel.pages; p++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile' + (sel.dropped.has(p) ? ' dropped' : '');
+        tile.innerHTML = `<img alt="Page ${p}" src="${drawPage(150, { title: sel.file.name, page: p, colour: sel.colour })}">
+                          <div class="num">${sel.dropped.has(p) ? 'dropping ' : ''}page ${p}</div>`;
+        tile.onclick = () => {
+          if (sel.dropped.has(p)) sel.dropped.delete(p);
+          else if (sel.dropped.size + 1 >= sel.pages) { toast('At least one page has to stay', true); return; }
+          else sel.dropped.add(p);
+          clearResults(); renderList(); renderReview();
+        };
+        grid.appendChild(tile);
+      }
+    }
+    stage.appendChild(grid);
+    stage.style.alignItems = 'flex-start';
+    $('strip').innerHTML = '';
+    $('strip').classList.add('hidden');
+    renderFoot();
+    return;
+  }
+  stage.style.alignItems = '';
+  $('strip').classList.remove('hidden');
+
+  const frames = framesFor();
+  if (!frames.length) {
+    stage.innerHTML = '<p class="quiet">Nothing to show yet.</p>';
+    $('strip').innerHTML = '';
+    renderFoot();
+    return;
+  }
+  // Keep the view on the selected file for per-file tools.
+  if (!['merge', 'edit'].includes(t)) {
+    const idx = frames.findIndex(f => f.file === state.files[state.selected]);
+    if (idx >= 0 && state.frame !== idx && renderReview.follow !== false) state.frame = idx;
+  }
+  state.frame = Math.max(0, Math.min(state.frame, frames.length - 1));
+  const f = frames[state.frame];
+
+  const prev = document.createElement('button');
+  prev.className = 'nav-btn'; prev.textContent = '‹'; prev.disabled = state.frame === 0;
+  prev.onclick = () => step(-1, frames);
+  const next = document.createElement('button');
+  next.className = 'nav-btn'; next.textContent = '›'; next.disabled = state.frame === frames.length - 1;
+  next.onclick = () => step(1, frames);
+
+  const img = document.createElement('img');
+  img.className = 'frame' + (f.kind === 'photo' ? ' photo' : '');
+  img.alt = '';
+  img.src = f.kind === 'photo' ? f.url : drawPage(360, f);
+  stage.append(prev, img, next);
+
+  const cap = document.createElement('div');
+  cap.className = 'caption';
+  cap.textContent = t === 'merge' ? `Page ${state.frame + 1} of ${frames.length} · from ${f.title}`
+    : t === 'edit' ? `Page ${state.frame + 1} of ${frames.length} · was page ${f.page}`
+    : `${state.frame + 1} of ${frames.length} · ${f.file.result && state.view === 'result' ? f.file.result.name : f.file.file.name}`;
+  stage.appendChild(cap);
+
+  const strip = $('strip');
+  strip.innerHTML = '';
+  frames.forEach((fr, i) => {
+    const s = document.createElement('img');
+    s.src = fr.kind === 'photo' ? fr.url : drawPage(52, fr);
+    s.className = (fr.kind === 'photo' ? 'photo ' : '') + (i === state.frame ? 'on' : '');
+    s.onclick = () => { state.frame = i; if (fr.file) state.selected = state.files.indexOf(fr.file); renderReview.follow = false; renderReview(); renderReview.follow = true; renderList(); };
+    strip.appendChild(s);
+  });
+  renderFoot();
+}
+
+function step(d, frames) {
+  state.frame = Math.max(0, Math.min(frames.length - 1, state.frame + d));
+  const f = frames[state.frame];
+  if (f.file) state.selected = state.files.indexOf(f.file);
+  renderReview.follow = false; renderReview(); renderReview.follow = true;
+  renderList();
+}
+
+// 2. Download is the last step, and it lives where you checked the result.
+function renderFoot() {
+  const foot = $('foot');
+  const t = state.tool;
+  foot.innerHTML = '';
+  if (t === 'merge') {
+    if (state.merged) {
+      foot.innerHTML = `<span class="facts">${COMBINED_NAME} · ${humanSize(state.merged.size)}</span>`;
+      foot.appendChild(dlButton('Download merged PDF', state.merged.url, COMBINED_NAME));
+    } else foot.innerHTML = `<div class="wait">Check the order above, then press <b>Merge into one</b>.</div>`;
+    return;
+  }
+  const done = state.files.filter(f => f.result);
+  if (!done.length) {
+    // Edit's preview is already the outcome, so it must not claim otherwise.
+    foot.innerHTML = t === 'edit'
+      ? `<div class="wait">${state.view === 'result' ? 'This is what you will get.' : 'Click the pages you want gone.'}
+         Then press <b>${TOOLS[t].action}</b> to make the file.</div>`
+      : `<div class="wait">Press <b>${TOOLS[t].action}</b> to see the result here before you download it.</div>`;
+    return;
+  }
+  const sel = state.files[state.selected];
+  if (sel?.result) {
+    const facts = document.createElement('span');
+    facts.className = 'facts';
+    facts.textContent = `${humanSize(sel.file.size)} → ${humanSize(sel.result.size)}${sel.result.note ? ' · ' + sel.result.note : ''}`;
+    foot.appendChild(facts);
+  }
+  if (done.length > 1) {
+    const all = document.createElement('button');
+    all.className = 'cta';
+    all.textContent = `Download all ${done.length}`;
+    all.onclick = async () => { for (const f of done) { save(f.result.url, f.result.name); await new Promise(r => setTimeout(r, 250)); } };
+    foot.appendChild(all);
+    if (sel?.result) {
+      const one = document.createElement('button');
+      one.className = 'ghost'; one.textContent = 'Just this one';
+      one.onclick = () => save(sel.result.url, sel.result.name);
+      foot.appendChild(one);
+    }
+  } else if (sel?.result) {
+    foot.appendChild(dlButton('Download', sel.result.url, sel.result.name));
+  }
+}
+
+function dlButton(label, url, name) {
+  const b = document.createElement('button');
+  b.className = 'cta'; b.textContent = label;
+  b.onclick = () => save(url, name);
+  return b;
+}
+function save(url, name) { const a = document.createElement('a'); a.href = url; a.download = name; a.click(); }
+
+function clearResults() {
+  state.files.forEach(f => { if (f.result?.url) URL.revokeObjectURL(f.result.url); f.result = null; });
+  if (state.merged) { URL.revokeObjectURL(state.merged.url); state.merged = null; }
+  if (state.view === 'result' && state.tool !== 'edit') state.view = 'original';
+}
+
+// --- review as a side panel, or as a pop-up -----------------------------------
+
+const isModal = () => document.body.classList.contains('review-modal') || document.body.classList.contains('narrow');
+function openReview() { if (!isModal()) return; $('review').classList.add('open'); $('backdrop').classList.add('open'); }
+function closeReview() { $('review').classList.remove('open'); $('backdrop').classList.remove('open'); }
+$('close').onclick = closeReview;
+$('backdrop').onclick = closeReview;
+$('peek').onclick = () => { renderReview(); $('review').classList.add('open'); $('backdrop').classList.add('open'); };
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeReview(); document.querySelectorAll('.info.open').forEach(i => i.classList.remove('open')); }
+  if (!$('work').classList.contains('hidden') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && document.activeElement?.tagName !== 'INPUT') {
+    const frames = framesFor();
+    if (frames.length) step(e.key === 'ArrowRight' ? 1 : -1, frames);
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.info')) document.querySelectorAll('.info.open').forEach(i => i.classList.remove('open'));
+});
+
+$('modeSeg').onclick = e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  [...$('modeSeg').children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  document.body.classList.toggle('review-modal', b.dataset.mode === 'modal');
+  document.body.classList.toggle('review-side', b.dataset.mode === 'side');
+  closeReview();
+  if (state.files.length) renderGo();
+};
+const narrow = matchMedia('(max-width: 900px)');
+const syncNarrow = () => {
+  document.body.classList.toggle('narrow', narrow.matches);
+  if (!narrow.matches) closeReview();
+  if (state.files.length) renderGo();
+};
+narrow.addEventListener('change', syncNarrow);
+syncNarrow();
+
+// --- doing the work (on the real engine) ----------------------------------------
+
+$('go').onclick = async () => {
+  if ($('go').dataset.review) { renderReview(); $('review').classList.add('open'); $('backdrop').classList.add('open'); return; }
+  state.busy = true; renderGo();
+  try {
+    if (state.tool === 'merge') {
+      const usable = state.files.filter(f => !f.error);
+      const parts = [];
+      for (const f of usable) parts.push([new Uint8Array(await f.file.arrayBuffer()), '']);
+      const bytes = build(parts);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      state.merged = { blob, url: URL.createObjectURL(blob), size: blob.size };
+    } else if (state.tool === 'edit') {
+      for (const f of state.files) {
+        if (f.error || !f.dropped.size) continue;
+        const spec = formatRanges([...f.dropped]);
+        const bytes = buildWithout([[new Uint8Array(await f.file.arrayBuffer()), spec]]);
+        const blob = new Blob([bytes], { type: 'application/pdf' });
+        f.result = { kind: 'pdf', blob, url: URL.createObjectURL(blob), size: blob.size,
+                     name: removedName(f.file.name, spec), note: `${f.dropped.size} dropped` };
+      }
+      state.view = 'result';
+    } else {
+      for (const f of state.files) {
+        if (f.error) continue;
+        const o = state.opts;
+        const settings = state.tool === 'compress'
+          ? { format: f.kind === 'pdf' ? 'pdf' : 'jpg', quality: 95, targetBytes: o.target }
+          : state.tool === 'resize'
+            ? { format: /\.png$/i.test(f.file.name) ? 'png' : 'jpg', quality: o.quality, maxPx: o.edge }
+            : { format: o.format, quality: o.quality };
+        try {
+          const { blob, name, note } = await convertFile(f.file, settings);
+          const kind = blob.type === 'application/pdf' ? 'pdf' : 'image';
+          f.result = { kind, blob, url: URL.createObjectURL(blob), size: blob.size, name, note };
+        } catch (err) {
+          f.error = err.message;
+        }
+        renderList();
+      }
+      state.view = 'result';
+    }
+  } finally {
+    state.busy = false;
+    renderList(); renderReview();
+    openReview();
+  }
+};
+
+// --- tools, picking, dropping ------------------------------------------------------
+
+function setTool(name) {
+  state.tool = name;
+  const t = TOOLS[name];
+  $('title').textContent = t.title;
+  $('wtitle').textContent = t.title;
+  $('blurb').textContent = t.blurb;
+  $('types').textContent = t.types;
+  [...$('nav').children].forEach(b => b.setAttribute('aria-current', String(b.dataset.tool === name)));
+  // Files that do not belong to this tool would only confuse it; start fresh.
+  if (state.files.some(f => !t.accept(f.file.name))) startOver();
+  clearResults();
+  state.view = name === 'edit' ? 'pick' : 'original';
+  state.frame = 0;
+  if (state.files.length) { renderList(); renderReview(); }
+}
+$('nav').onclick = e => { const b = e.target.closest('button'); if (b) setTool(b.dataset.tool); };
+
+$('choose').onclick = e => { e.stopPropagation(); $('picker').click(); };
+const strip = $('addStrip');
+strip.onclick = () => $('picker').click();
+strip.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('picker').click(); } };
+$('reset').onclick = startOver;
+$('picker').onchange = () => { add([...$('picker').files]); $('picker').value = ''; };
+
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => add([...e.dataTransfer.files]));
+// Once there are files, dragging more over the page lights up the strip, so
+// it is obvious where they go -- and a drop anywhere still counts, so nobody
+// has to aim. Counting enter/leave is what stops it flickering as the pointer
+// crosses child elements.
+let depth = 0;
+const working = () => !$('work').classList.contains('hidden');
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragenter', e => {
+  if (!working() || !hasFiles(e)) return;
+  e.preventDefault();
+  depth++;
+  document.body.classList.add('dragging');
+});
+window.addEventListener('dragleave', () => {
+  if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); }
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  depth = 0;
+  document.body.classList.remove('dragging');
+  if (working() && e.dataTransfer?.files?.length) add([...e.dataTransfer.files]);
+});
+
+// --- sample files, so every tool can be tried without hunting for any ----------------
+
+function samplePdf(name, labels) {
+  const objs = ['<< /Type /Catalog /Pages 2 0 R >>', null];
+  const n = labels.length;
+  objs[1] = `<< /Type /Pages /Kids [${labels.map((_, i) => `${3 + i} 0 R`).join(' ')}] /Count ${n} >>`;
+  for (let i = 0; i < n; i++) objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${3 + n + i} 0 R /Resources << /Font << /F1 ${3 + 2 * n} 0 R >> >> >>`);
+  for (const l of labels) { const b = `BT /F1 24 Tf 72 700 Td (${l}) Tj ET`; objs.push(`<< /Length ${b.length} >>\nstream\n${b}\nendstream`); }
+  objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  let out = '%PDF-1.4\n'; const off = [];
+  objs.forEach((b, i) => { off.push(out.length); out += `${i + 1} 0 obj\n${b}\nendobj\n`; });
+  const xr = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('')
+       + `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF\n`;
+  const bytes = new Uint8Array(out.length);
+  for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i);
+  return new File([bytes], name, { type: 'application/pdf' });
+}
+
+async function samplePhoto(name, from, to, w = 1600, h = 1200) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, from); g.addColorStop(1, to);
+  x.fillStyle = g; x.fillRect(0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h);
+  let s = name.length * 97;
+  for (let i = 0; i < d.data.length; i += 4) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const n = (s / 0x7fffffff - .5) * 44;
+    d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n;
+  }
+  x.putImageData(d, 0, 0);
+  x.fillStyle = 'rgba(255,255,255,.9)';
+  x.font = `600 ${w / 14}px -apple-system, system-ui, sans-serif`;
+  x.fillText(name.replace(/\.\w+$/, ''), w * .07, h * .88);
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .95));
+  return new File([blob], name, { type: 'image/jpeg' });
+}
+
+$('samples').onclick = async () => {
+  if (state.tool === 'merge') {
+    add([samplePdf('Lease.pdf', ['Lease 1', 'Lease 2', 'Lease 3', 'Lease 4']),
+         samplePdf('Addendum.pdf', ['Addendum A', 'Addendum B']),
+         samplePdf('ID scan.pdf', ['ID'])]);
+  } else if (state.tool === 'edit') {
+    add([samplePdf('Contract.pdf', Array.from({ length: 8 }, (_, i) => `Contract ${i + 1}`))]);
+  } else {
+    add([await samplePhoto('Beach.jpg', '#e9a35b', '#2f7d9a'),
+         await samplePhoto('Garden.jpg', '#4f9a4a', '#e6d27a'),
+         await samplePhoto('Sunset.jpg', '#c2643a', '#3a2a5c')]);
+  }
+};
+
+setTool('convert');
+</script>
+</body>
+</html>

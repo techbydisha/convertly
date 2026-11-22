@@ -275,11 +275,67 @@ class CommandLine(unittest.TestCase):
             self.assertNotEqual(srv.free_port(busy), busy)
 
 
+class SharedInterface(ServerCase):
+    """The macOS app serves the same page as the hosted one, from web/."""
+
+    def test_the_page_is_told_to_use_this_server(self):
+        _, _, body = self.get("/")
+        self.assertIn(b'<meta name="convertly-backend" content="server">', body)
+
+    def test_the_hosted_pages_own_policy_is_removed(self):
+        """Its connect-src 'none' would block every request to this server.
+        Two policies apply together, so it has to go, and the header stands in."""
+        _, headers, body = self.get("/")
+        self.assertNotIn(b"Content-Security-Policy", body)
+        self.assertIn("connect-src 'self'", headers["Content-Security-Policy"])
+
+    def test_serves_the_interface_files_with_the_right_types(self):
+        for path, kind in (("/css/app.css", "text/css"), ("/js/ui.js", "text/javascript"),
+                           ("/js/backend-server.js", "text/javascript"),
+                           ("/vendor/pdfjs/pdf.min.mjs", "text/javascript")):
+            with self.subTest(path=path):
+                status, headers, body = self.get(path)
+                self.assertEqual(status, 200)
+                self.assertTrue(headers["Content-Type"].startswith(kind))
+                self.assertGreater(len(body), 100)
+
+    def test_every_file_the_page_loads_is_served(self):
+        """Nothing index.html references may 404 on the Mac."""
+        import re
+        _, _, body = self.get("/")
+        refs = re.findall(rb'(?:src|href)="((?:css|js)/[^"]+)"', body)
+        self.assertTrue(refs)
+        for ref in refs:
+            with self.subTest(ref=ref):
+                self.assertEqual(self.get("/" + ref.decode())[0], 200)
+
+    def test_only_the_interface_is_served(self):
+        """Tests, READMEs and anything outside css/, js/ and vendor/ stay private."""
+        for path in ("/README.md", "/tests/spec.test.mjs", "/vendor/README.md",
+                     "/vendor/pdfjs/LICENSE", "/js/", "/css", "/index.htm"):
+            with self.subTest(path=path):
+                self.assertEqual(self.get(path)[0], 404)
+
+    def test_nothing_outside_the_site_can_be_read(self):
+        for path in ("/js/../../src/convertly/server.py", "/js/%2e%2e/%2e%2e/README.md",
+                     "/css/..%2f..%2fREADME.md", "/vendor/../../pyproject.toml",
+                     "/js/%2e%2e%2f%2e%2e%2f.git/config", "/js/ui.js%00.css"):
+            with self.subTest(path=path):
+                status, _, body = self.get(path)
+                self.assertEqual(status, 404)
+                self.assertNotIn(b"import", body[:200])
+
+    def test_preview_accepts_a_size(self):
+        status, _, _ = self.post("/preview?px=99999", make_image("png", 300, 200),
+                                 headers={"X-Filename": "a.png"})
+        self.assertIn(status, (200, 204))
+
+
 class ErrorHandling(ServerCase):
     """Unexpected failures must produce a status code, never a crash."""
 
     def test_missing_index_file_reports_cleanly(self):
-        with mock.patch.object(srv, "WEB", "/nonexistent/dir"):
+        with mock.patch.object(srv, "SITE", "/nonexistent/dir"):
             status, _, body = self.get("/")
         self.assertEqual(status, 500)
         self.assertIn(b"index.html", body)

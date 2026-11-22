@@ -224,15 +224,29 @@ the browser build, and confirm in each:
       leaves pages 1 and 4
 - [ ] **Edit**: a range past the end, or one covering every page, disables the
       button and says why
-- [ ] After any PDF job, clicking the row's badge opens the finished file
-- [ ] The console is free of errors
+- [ ] A dropped PDF's row shows a picture of its first page, not a badge
+- [ ] Each file added says so in a short message, and a refused one says *why*
+- [ ] **Add more** accepts dropped files as well as a click
+- [ ] After any job the side panel shows the result, and **Download** is the
+      last step, not automatic
+- [ ] **Convert**: the panel switches between Original and Result, and ‹ ›
+      step through the files
+- [ ] **Merge**: the panel shows the joined document live, and follows ▲▼
+- [ ] **Edit**: clicking pages in the grid fills the drop box, and *What's
+      left* shows exactly the pages that will remain
+- [ ] Each ⓘ opens its note; none of the notes is in the way otherwise
+- [ ] At phone width the panel is a sheet from the bottom, its Download button
+      on screen, with no sideways scroll
+- [ ] The console is free of errors, and of CSP violations
 
-Two things differ by design. The size readout is measured by whichever encoder
+One thing differs by design. The size readout is measured by whichever encoder
 will actually run — the canvas in the browser, `sips` through the server on the
 Mac — because an estimate from a different encoder than the one that produces
-the file is worse than no estimate. And a finished PDF gets a picture of its
-first page only on the Mac, which has Quick Look; the browser build has no
-renderer vendored yet, so its badge opens the file instead of previewing it.
+the file is worse than no estimate.
+
+Browsers cache modules aggressively. When checking a change locally, use the
+`browser build (no cache)` launch entry or a hard reload, or the old script
+will run against the new markup and the bug you see will not be real.
 
 ### Only in the browser build
 
@@ -262,6 +276,18 @@ document.addEventListener('securitypolicyviolation',
 
 `fetch`, `XMLHttpRequest`, `WebSocket` and `sendBeacon` must all report a
 `connect-src` violation.
+
+**Workers too.** A worker does not inherit a `<meta>` policy unless it is
+started from a `blob:` URL, which is what `js/worker.js` does. Prove it still
+holds by starting one the same way and having it try:
+
+```js
+const { sandboxedWorker } = await import('./js/worker.js');
+const src = URL.createObjectURL(new Blob(
+  ["fetch('https://example.com/').then(()=>postMessage('WENT OUT'),()=>postMessage('blocked'))"],
+  { type: 'text/javascript' }));
+const w = sandboxedWorker(src); w.onmessage = e => console.log(e.data);  // must log "blocked"
+```
 
 ## Verifying PDF work against an independent engine
 
@@ -312,6 +338,9 @@ Each of these was a real defect. The test named beside it is the guard.
 | The Edit PDF tab showed 1024-based sizes while the Convert tab used 1000-based | `sizes are shown as the spec says` |
 | `frame-ancestors` in a `<meta>` CSP is ignored by browsers, so it protected nothing | Browser manual check — load the page in an iframe |
 | A resize limit larger than the picture made the browser's fit-to-size search spend its whole attempt budget shrinking a number that changed nothing | Browser manual check — resize limit above the picture, with a size limit |
+| A worker loaded from its own URL ignored the page's `connect-src 'none'` | CI: no `new Worker` outside `web/js/worker.js`; `test_workers_inherit_the_policy`; manual worker probe |
+| Just after a deploy, a cached old `ui.js` ran against the new `index.html` | `pages.yml` stamps `?v=<commit>` on every reference; CI checks none escapes |
+| A NUL byte in a static path crashed the Mac server's handler | `SharedInterface` traversal cases |
 
 ## Definition of done
 

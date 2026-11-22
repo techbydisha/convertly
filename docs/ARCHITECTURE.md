@@ -1,7 +1,7 @@
 # Architecture
 
-Convertly is a local web app: a small Python server, a single HTML page, and two
-modules that do the real work. It has no dependencies and no build step.
+Convertly is a local web app: a small Python server, one web page (shared with
+the hosted build), and two modules that do the real work. It has no dependencies and no build step.
 
 ```
 browser  ──HTTP──▶  server.py  ──▶  convert.py  ──▶  sips / Quick Look
@@ -27,12 +27,13 @@ Routes, and nothing else. Each handler reads a body, calls into `convert` or
 
 | Route | Purpose |
 | --- | --- |
-| `GET /` | the one HTML page |
+| `GET /` | the interface, `web/index.html`, marked to use this server |
+| `GET /css/…`, `/js/…`, `/vendor/…` | the interface's files, and nothing else from the repository |
 | `GET /health` | used by tests and CI |
 | `POST /convert` | one file in, one converted file out |
-| `POST /preview` | one file in, a small JPEG thumbnail out |
+| `POST /preview?px=` | one file in, a JPEG picture of it out, `px` on the longest edge |
 | `POST /pdf/info` | page count for a PDF |
-| `POST /pdf/build` | page ranges of one or more PDFs, joined into one |
+| `POST /pdf/build` | page ranges of one or more PDFs, joined into one; `?mode=remove` drops the ranges instead |
 
 Uploads are sent as **raw request bodies** rather than multipart forms. Python
 3.13 removed the `cgi` module, so multipart would mean hand-writing a parser;
@@ -114,20 +115,24 @@ Two details worth knowing:
 
 Encrypted PDFs are refused rather than mangled.
 
-### `web/index.html`
+### The interface: `web/`
 
-The entire interface: markup, styles and script in one file, no framework and no
-build step. Two tabs share the file-row layout and the thumbnail logic.
+One interface for both apps — no framework and no build step. The server sends
+`web/index.html` with a marker that tells `web/js/ui.js` to use
+`backend-server.js`, which posts each job to the routes above; the hosted copy
+uses `backend-local.js` and does the same jobs in the page. Both answer the
+same questions (convert, count pages, merge, remove pages, draw a picture,
+estimate a size), so the interface never asks which one it has.
 
-Thumbnails come from the server because a browser cannot decode HEIC or render a
-PDF page. After a conversion the thumbnail is swapped for the converted image
-itself, so what the user sees is what downloads.
+Pictures of images and Office/iWork files come from the backend (`sips` and
+Quick Look on the Mac); pictures of PDF pages come from pdf.js in the page on
+both, so the review panel can show every page of a result before it is
+downloaded.
 
-The one subtle piece is the **generation counter**. Conversions are asynchronous,
-and changing the format while one is in flight used to leave that file holding
-the previous format. Every conversion captures the counter when it starts;
-changing a setting increments it; a result arriving with a stale counter is
-discarded and re-run.
+The one subtle piece is **staleness**. Jobs are asynchronous, and changing a
+setting while one is in flight must not leave a file holding the previous
+result. Changing a setting clears every result and waits for another press of
+the button; a result that arrives for a list that has since changed is dropped.
 
 ## Deliberate limits
 
@@ -135,7 +140,8 @@ discarded and re-run.
   would need different tools behind the same interface in `convert.py`.
 - **First page only, for PDF and Word to images.** macOS has no built-in
   multi-page rasteriser — `sips` renders page 1 at 72 dpi, Quick Look at ~200
-  dpi, and neither reaches page 2. Doing this properly needs a rendering library
-  such as `pypdfium2`, the one dependency with a standing case for it.
+  dpi, and neither reaches page 2. The page itself can draw every page with
+  pdf.js, which is how the review panel shows them; exporting them all is on
+  the roadmap.
 - **No persistence.** There is no history, no queue and no cache. Files exist in
   memory for one request.

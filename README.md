@@ -18,7 +18,7 @@ there is nothing to install.
 | Pages, Keynote, Numbers | yes | yes, to PDF |
 | Merge PDFs, remove pages | yes | yes |
 | Compress a PDF | yes | yes |
-| PDF pages as images | first page | not yet |
+| PDF pages as images | first page | first page |
 | TIFF | yes | not yet |
 | Word documents | yes | no — `qlmanage` has no browser equivalent |
 | Install | nothing | nothing |
@@ -27,9 +27,11 @@ Both are in this repository and must behave identically: the same page ranges,
 the same filenames, the same sizes. Those rules are pinned in
 [`shared/spec/`](shared/spec/) and both test suites run against them.
 
-They now look the same, too: one interface, five tools — Convert, Compress,
-Resize, Merge, Edit. The macOS app is the complete one; the browser build
-needs nothing installed and works on a phone:
+They share one interface, too — the macOS app serves the same page from
+[`web/`](web/), with five tools (Convert, Compress, Resize, Merge, Edit) and a
+review panel that shows the finished file, every page of it, before you
+download. The macOS app is the complete one; the browser build needs nothing
+installed and works on a phone:
 **<https://techbydisha.github.io/convertly/>**. Its source is in [`web/`](web/).
 
 ---
@@ -196,12 +198,11 @@ convertly/
 │   ├── server.py           HTTP routes and the command line
 │   ├── convert.py          format detection, conversion, thumbnails, image→PDF
 │   ├── pdfedit.py          PDF parsing, page extraction, joining
-│   ├── naming.py           what produced files are called
-│   └── web/index.html      the macOS app's interface, one file
-├── web/                    the browser build, deployed to GitHub Pages
-│   ├── js/                 the conversion code, as ES modules
+│   └── naming.py           what produced files are called
+├── web/                    the interface for both apps; deployed to GitHub Pages
+│   ├── js/                 the interface and the in-page engine, as ES modules
 │   ├── tests/              its share of the shared spec, run by node --test
-│   └── vendor/             libheif, committed rather than loaded from a CDN
+│   └── vendor/             libheif and pdf.js, committed rather than loaded from a CDN
 ├── shared/spec/            behaviour both builds must satisfy
 ├── tests/                  the test suite and a dependency-free coverage report
 └── docs/
@@ -232,8 +233,8 @@ like here.
 
 ## Roadmap
 
-- **Finishing the browser build** — PDF pages as images, and TIFF. Both need a
-  vendored renderer or decoder; the PDF editing engine is already ported.
+- **TIFF in the browser build** — it needs a vendored decoder; everything else
+  the Mac does with pictures and PDFs, the page now does too.
 - **Leaving a file alone when it already fits** — a JPEG is re-encoded even
   when it is already smaller than the size limit asked for, which can make it
   slightly *larger*. Both builds do this.
@@ -247,9 +248,9 @@ like here.
   copies pages in any order, so both are small additions.
 - **Combining images into a single PDF** — convert each to PDF, then join them
   in the Edit PDF tab; a one-step version is a natural next step.
-- **Every page of a PDF as images** — the one real gap. It needs a rendering
-  library such as `pypdfium2`, since macOS ships no multi-page rasteriser. This
-  is the one case with a standing argument for a first dependency.
+- **Every page of a PDF as images** — the review panel already draws every
+  page with pdf.js, so the browser build could export them all; the Mac's
+  server would need the same, from Quick Look or a renderer, to stay in step.
 
 ---
 

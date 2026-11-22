@@ -8,16 +8,41 @@
 import { convertedName } from './naming.js';
 import { OUTPUT_FORMATS, kindOf, unsupportedReason } from './kinds.js';
 import { decodeImage } from './decode.js';
-import { fitJpeg, fitPng, budgetFor } from './fit.js';
+import { fitJpeg, fitPng, budgetFor, joinNotes } from './fit.js';
 import { jpegToPdf } from './pdfwrite.js';
 import { iworkPreview } from './unzip.js';
 import { fitPdf } from './pdfcompress.js';
+import { renderPageBitmap, renderedPageCount } from './render.js';
 
 export class ConversionError extends Error {}
 
 export const MAX_BYTES = 200 * 1024 * 1024;
 
 const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', pdf: 'application/pdf' };
+
+// A PDF page is drawn this many pixels on its longest edge before encoding --
+// the same as RENDER_PX in convert.py, about 200 dpi for a Letter page, which
+// keeps text readable.
+const RENDER_PX = 2400;
+
+/**
+ * The first page of a PDF as a picture, the way the macOS app does it: first
+ * page only, and the row says so when there are more. pdf.js draws it; the
+ * pixels go straight to the encoder, so nothing is compressed twice.
+ */
+async function pdfToImage(pdfBlob, format, quality, maxPx, targetBytes) {
+  const pages = await renderedPageCount(pdfBlob);
+  const bitmap = await renderPageBitmap(pdfBlob, 1, RENDER_PX);
+  try {
+    const fitted = format === 'png'
+      ? await fitPng(bitmap, { maxPx, targetBytes })
+      : await fitJpeg(bitmap, { quality, maxPx, targetBytes });
+    const first = pages > 1 ? `First page only (${pages} pages in the PDF)` : null;
+    return { blob: fitted.blob, note: joinNotes(first, fitted.note) };
+  } finally {
+    bitmap.close?.();
+  }
+}
 
 async function imageToOutput(blobOrFile, name, outFormat, quality, maxPx, targetBytes) {
   const budget = budgetFor(outFormat, targetBytes);
@@ -74,8 +99,8 @@ export async function convertFile(file, { format, quality = 85, maxPx = null, ta
       }
       return { blob: file.slice(0, file.size, MIME.pdf), name, note: 'Already a PDF -- copied unchanged' };
     }
-    // Rasterising a PDF page needs a PDF renderer; the Mac uses Quick Look.
-    throw new ConversionError('Turning a PDF into an image needs the macOS app');
+    const { blob, note } = await pdfToImage(file, format, quality, maxPx, targetBytes);
+    return { blob, name, note };
   }
 
   if (kind === 'iwork') {
@@ -85,8 +110,10 @@ export async function convertFile(file, { format, quality = 85, maxPx = null, ta
       if (format === 'pdf') {
         return { blob: new Blob([preview.bytes], { type: MIME.pdf }), name, note };
       }
-      throw new ConversionError(
-        'This document stores a PDF preview, and turning a PDF into an image needs the macOS app');
+      const pdfBlob = new Blob([preview.bytes], { type: MIME.pdf });
+      const made = await pdfToImage(pdfBlob, format, quality, maxPx, targetBytes);
+      const first = made.note && made.note.startsWith('First page');
+      return { blob: made.blob, name, note: first ? `${made.note}; from the document's stored preview` : note };
     }
     const inner = new Blob([preview.bytes], { type: 'image/jpeg' });
     const { blob } = await imageToOutput(inner, 'preview.jpg', format, quality, maxPx, targetBytes);

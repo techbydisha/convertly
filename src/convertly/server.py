@@ -11,6 +11,7 @@ live in memory for the length of one request.
 import argparse
 import json
 import os
+import re
 import socket
 import sys
 import threading
@@ -31,8 +32,51 @@ from .convert import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-WEB = os.path.join(HERE, "web")
 DEFAULT_PORT = 8765
+
+
+def _find_site():
+    """Where the interface lives.
+
+    The macOS app and the hosted page run the same interface, from one copy of
+    it in web/. Installed with pip, that copy is packaged as convertly/site;
+    run from a checkout, it is web/ at the top of the repository.
+    """
+    for candidate in (os.path.join(HERE, "site"),
+                      os.path.normpath(os.path.join(HERE, os.pardir, os.pardir, "web"))):
+        if os.path.isfile(os.path.join(candidate, "index.html")):
+            return candidate
+    return os.path.join(HERE, "site")     # missing: requests for it fail cleanly
+
+
+SITE = _find_site()
+
+# The page served here does its work through this server, so it may connect
+# to its own origin -- and nowhere else. Otherwise it is the hosted page's
+# policy: no inline code of any kind, and workers only from this origin or
+# from blob: wrappers, which inherit this policy (see web/js/worker.js).
+CSP = (
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; "
+    "img-src 'self' blob: data:; worker-src 'self' blob:; connect-src 'self'; "
+    "form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+)
+
+# The only files served from the site, and as what. Anything else is a 404,
+# including the tests and READMEs that sit beside them.
+STATIC_DIRS = ("css/", "js/", "vendor/")
+STATIC_TYPES = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+}
+
+# The hosted page carries its own policy in a <meta> tag, with connect-src
+# 'none'. Served here, that would block every request to this server --
+# two policies apply together, so the stricter wins -- so it is removed and
+# the header above stands in for it.
+META_CSP = re.compile(
+    r"""<meta\s[^>]*http-equiv\s*=\s*["']?Content-Security-Policy["']?[^>]*>""",
+    re.IGNORECASE)
 
 MIME = {
     "jpg": "image/jpeg",
@@ -55,15 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
-        # Everything the page needs is inline and local; this stops any
-        # injected markup from reaching the network.
-        self.send_header(
-            "Content-Security-Policy",
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; "
-            "connect-src 'self'; form-action 'none'; frame-ancestors 'none'; "
-            "base-uri 'none'",
-        )
+        self.send_header("Content-Security-Policy", CSP)
         for key, value in (extra or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -103,17 +139,56 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urllib.parse.urlparse(self.path).path
         if path in ("/", "/index.html"):
-            try:
-                with open(os.path.join(WEB, "index.html"), "rb") as fh:
-                    body = fh.read()
-            except OSError:
-                self._send(500, b"index.html is missing")
-                return
-            self._send(200, body, "text/html; charset=utf-8")
+            self._send_index()
         elif path == "/health":
             self._send(200, b"ok")
+        elif path.startswith(tuple("/" + d for d in STATIC_DIRS)):
+            self._send_static(path)
         else:
             self._send(404, b"Not found")
+
+    def _send_index(self):
+        """The shared page, told to use this server, under this server's policy."""
+        try:
+            with open(os.path.join(SITE, "index.html"), encoding="utf-8") as fh:
+                html = fh.read()
+        except OSError:
+            self._send(500, b"index.html is missing")
+            return
+        html, removed = META_CSP.subn("", html, count=1)
+        if not removed:
+            # Not fatal -- the header still applies -- but a page that has
+            # dropped its own policy is a change worth noticing.
+            sys.stderr.write("warning: index.html has no <meta> policy to replace\n")
+        html = html.replace(
+            "<head>", '<head>\n<meta name="convertly-backend" content="server">', 1)
+        self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
+
+    def _send_static(self, path):
+        """A file from the site: only css/, js/ and vendor/, only by type, never outside it."""
+        relative = urllib.parse.unquote(path).lstrip("/")
+        # Checked before anything touches the filesystem: realpath() raises on
+        # an embedded NUL, which crashed the handler until a test sent one.
+        if "\0" in relative or not relative.startswith(STATIC_DIRS):
+            self._send(404, b"Not found")
+            return
+        root = os.path.realpath(SITE)
+        try:
+            full = os.path.realpath(os.path.join(root, relative))
+        except (ValueError, OSError):
+            self._send(404, b"Not found")
+            return
+        kind = STATIC_TYPES.get(os.path.splitext(full)[1].lower())
+        if not full.startswith(root + os.sep) or kind is None or not os.path.isfile(full):
+            self._send(404, b"Not found")
+            return
+        try:
+            with open(full, "rb") as fh:
+                body = fh.read()
+        except OSError:
+            self._send(404, b"Not found")
+            return
+        self._send(200, body, kind)
 
     def _read_body(self):
         """Read the uploaded bytes, or send an error and return None."""
@@ -139,7 +214,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/convert":
             self.do_convert(urllib.parse.parse_qs(parsed.query))
         elif parsed.path == "/preview":
-            self.do_preview()
+            self.do_preview(urllib.parse.parse_qs(parsed.query))
         elif parsed.path == "/pdf/info":
             self.do_pdf_info()
         elif parsed.path == "/pdf/build":
@@ -147,13 +222,16 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, b"Not found")
 
-    def do_preview(self):
-        """A small JPEG thumbnail so the user can see what they dropped."""
+    def do_preview(self, query=None):
+        """A JPEG of what was dropped: a thumbnail for the list, or with `px`,
+        a picture big enough for the review pane."""
+        px = self._positive_int(query or {}, "px", 1600) or 240
+        px = max(60, px)
         data = self._read_body()
         if data is None:
             return
         try:
-            thumb = thumbnail(data, self._filename())
+            thumb = thumbnail(data, self._filename(), px)
         except Exception:
             thumb = None
         if not thumb:

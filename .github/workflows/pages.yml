@@ -20,6 +20,7 @@ on:
     paths:
       - 'web/**'
       - '.github/workflows/pages.yml'
+      - '.github/scripts/stamp_version.py'
   workflow_dispatch:
 
 permissions:
@@ -76,10 +77,19 @@ jobs:
           fi
           echo "no remote assets, CSP present, connect-src 'none' intact"
 
+      - name: Give this deploy's files their own URLs
+        run: |
+          # Pages caches each file for ~10 minutes on its own, so right after a
+          # deploy a browser can pair the new index.html with an old ui.js and
+          # break. The uploaded copy names every script and stylesheet with
+          # ?v=<commit>; the repository keeps plain names. See the script.
+          cp -R web "$RUNNER_TEMP/site"
+          python3 .github/scripts/stamp_version.py "$RUNNER_TEMP/site" "${GITHUB_SHA::12}"
+
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: web
+          path: ${{ runner.temp }}/site
 
   deploy:
     needs: build

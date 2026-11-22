@@ -71,10 +71,11 @@ Plain Python, no formatter enforced. Follow what is already there: four spaces,
 lines around 95 characters, double quotes, docstrings on modules and non-obvious
 functions. Prefer a clear twenty-line function over a clever five-line one.
 
-The UI is one HTML file with inline CSS and JavaScript
-(`src/convertly/web/index.html`). That is intentional — it keeps the whole
-interface readable in one place and needs no build step. Please do not introduce
-a bundler, a framework, or a package manager.
+The UI lives in `web/` — `index.html`, one stylesheet and plain ES modules —
+and both apps serve it. That is intentional: one interface to change, readable
+as source, with no build step. Please do not introduce a bundler, a framework,
+or a package manager, and keep scripts and styles out of the HTML (the policy
+refuses inline code).
 
 ## Where things live
 
@@ -83,7 +84,8 @@ src/convertly/
   server.py     HTTP routes and the CLI
   convert.py    format detection, conversion, thumbnails, image→PDF
   pdfedit.py    PDF parsing, page extraction, joining
-  web/          the user interface, one file
+web/            the interface for both apps, and the hosted build's engine
+shared/spec/    behaviour both builds must satisfy
 tests/          the test suite and the coverage report
 docs/           test strategy and architecture notes
 ```
